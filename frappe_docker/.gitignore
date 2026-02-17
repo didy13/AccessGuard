@@ -3,6 +3,7 @@
 
 # mounted volume
 sites
+!sites/.gitkeep
 
 development/*
 !development/README.md
@@ -18,7 +19,7 @@ development/*
 !.vscode/extensions.json
 
 # VS Code devcontainer
-.devcontainer
+!.devcontainer
 *.code-workspace
 
 # Python
