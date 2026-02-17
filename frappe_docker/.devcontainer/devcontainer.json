@@ -47,5 +47,5 @@
   "mounts": [
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/frappe/.ssh,type=bind,consistency=cached"
   ],
-  "postCreateCommand": "bash .devcontainer/setup.sh"
+  "postCreateCommand": "bash /workspace/.devcontainer/setup.sh"
 }
