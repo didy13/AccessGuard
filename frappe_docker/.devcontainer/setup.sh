@@ -6,14 +6,8 @@ until mysqladmin ping -h mariadb -u root -p123 --silent; do
     sleep 2
 done
 
-echo "🔄 Instaliram Python zavisnosti (ako postoje)..."
-if [ -f /workspace/requirements.txt ]; then
-    pip install -r /workspace/requirements.txt
-fi
-
 cd /workspace/development
 
-# Inicijalizacija bench-a ako već ne postoji
 if [ ! -d "frappe-bench" ]; then
     echo "🛠️ Kreiram novi Frappe bench (version-15)..."
     bench init frappe-bench --frappe-branch version-15 --python "$(which python)" --skip-redis-config-generation
@@ -21,7 +15,7 @@ if [ ! -d "frappe-bench" ]; then
     bench set-mariadb-host mariadb
     bench set-redis-cache-host redis-cache:6379
     bench set-redis-queue-host redis-queue:6379
-    bench set-redis-socketio-host redis-queue:6379  # ako koristiš socketio
+    bench set-redis-socketio-host redis-queue:6379
 
     echo "🌐 Kreiram sajt 'development.localhost'..."
     bench new-site development.localhost \
@@ -29,13 +23,8 @@ if [ ! -d "frappe-bench" ]; then
         --admin-password admin \
         --db-root-password 123 \
         --db-name development
-
-    echo "📦 Instaliram aplikaciju 'the_smekeri_oauth'..."
-    bench get-app the_smekeri_oauth /workspace/the_smekeri_oauth
-    bench --site development.localhost install-app the_smekeri_oauth
 else
-    echo "✅ Bench već postoji, preskačem inicijalizaciju."
+    echo "✅ Bench već postoji, preskačem."
 fi
 
-echo "✅ Setup završen! Sada možeš pokrenuti bench sa:"
-echo "   cd /workspace/development/frappe-bench && bench start"
+echo "✅ Setup završen! Sada možeš pokrenuti 'bench start' u /workspace/development/frappe-bench"
