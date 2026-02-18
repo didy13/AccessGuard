@@ -18,6 +18,7 @@ serversko okruzenje
 ## Pokretanje saas_monitor.py
     1. Instalirati python 3.x.x
     2. Pokrenuti komandu u folderu: python -m pip install -r requirements.txt
+    3. Uslov je da bude pokrenut frappe_bench, pristupiti njemu ili preko localhost:8000 ili ngrok linka koji host prosleđuje
 
 ## Arhitektura sistema
 Nas sistem se sastoji od nekoliko kontejnera koji rade zajedno:
