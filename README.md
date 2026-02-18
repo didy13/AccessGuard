@@ -8,11 +8,16 @@ Ovaj repositorijum koristi **Docker** kao bazu za nas SaaS Monitor, on nam omogu
 serversko okruzenje
 
 ## Kako pokrenuti
+
     1. Instalirati **Docker Desktop**  i **VS Code**
     2. Instalirati VS Code ekstenziju 'Dev Containers'
     3. Otvorite ovaj folder u VS Code-u
     4. Kliknite "Reopen in Container"
     5. Sacekajte da se otvori i u tom trenutku vas server ce biti spreman na portu '8000'
+
+## Pokretanje saas_monitor.py
+    1. Instalirati python 3.x.x
+    2. Pokrenuti komandu u folderu: python -m pip install -r requirements.txt
 
 ## Arhitektura sistema
 Nas sistem se sastoji od nekoliko kontejnera koji rade zajedno:
