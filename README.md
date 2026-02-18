@@ -12,6 +12,7 @@ serversko okruzenje
     1. Instalirati **Docker Desktop**  i **VS Code**
     2. Instalirati VS Code ekstenziju 'Dev Containers'
     3. Otvorite ovaj folder u VS Code-u
+    4. Obavezno promeni CRLF u LF za setup.sh
     4. Kliknite "Reopen in Container"
     5. Provera python verzije u terminalu:
         1. python --version (ukoliko nije 3.11.9 uradi dalje)
