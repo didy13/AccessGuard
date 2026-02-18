@@ -13,7 +13,11 @@ serversko okruzenje
     2. Instalirati VS Code ekstenziju 'Dev Containers'
     3. Otvorite ovaj folder u VS Code-u
     4. Kliknite "Reopen in Container"
-    5. Sacekajte da se otvori i u tom trenutku vas server ce biti spreman na portu '8000'
+    5. Provera python verzije u terminalu:
+        1. python --version (ukoliko nije 3.11.9 uradi dalje)
+        2. pyenv versions (ukoliko nema 3.11.9 instaliraj je posebno)
+        3. pyenv local 3.11.9
+    6. Sacekajte da se otvori i u tom trenutku vas server ce biti spreman na portu '8000'
 
 ## Pokretanje saas_monitor.py
     1. Instalirati python 3.x.x
