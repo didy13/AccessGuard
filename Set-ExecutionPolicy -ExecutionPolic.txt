@@ -10,7 +10,10 @@ $permissions = @("User.Read", "Mail.Read", "offline_access")
 $userEmails = @(
     "nikolapetrovic140999@st3fkeeegmail.onmicrosoft.com",
     "nemanjazivkovic060181@st3fkeeegmail.onmicrosoft.com",
-    "marko.markovic110200@st3fkeeegmail.onmicrosoft.com"
+    "marko.markovic110200@st3fkeeegmail.onmicrosoft.com",
+    "katarinagavrilovic030887@st3fkeeegmail.onmicrosoft.com",
+    "vanjaristic130900@st3fkeeegmail.onmicrosoft.com",
+    "bojanakrstic090794@st3fkeeegmail.onmicrosoft.com"
 )
 Write-Host "Povezivanje na Microsoft Graph..." -ForegroundColor Cyan
 Connect-MgGraph -TenantId $tenantId -Scopes "User.ReadBasic.All", "Application.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All", "AppRoleAssignment.ReadWrite.All"
