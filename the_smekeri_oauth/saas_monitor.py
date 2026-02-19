@@ -72,13 +72,13 @@ def create_access_audit_allert(employee_name, email, saas_app, risk="High"):
     }
 
     try:
-        reponse = requests.post(url, headers=frappe_headers, json=data)
+        response = requests.post(url, headers=frappe_headers, json=data)
 
-        if reponse.status_code == 200:
+        if response.status_code == 200:
             print(f"Alert created for {employee_name} - {saas_app}")
             return response.json()
         else:
-            print(f"Error creating alert: {reponse.text}")
+            print(f"Error creating alert: {response.text}")
             return None
         
     except Exception as e:
