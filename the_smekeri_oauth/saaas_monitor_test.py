@@ -4,15 +4,29 @@ import json
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 load_dotenv()
 
+# Frappe
 BASE_URL = os.getenv("BASE_URL")
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
+
+# Azure
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
+
+#Google
+SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+SCOPES = [
+    'https://www.googleapis.com/auth/admin.directory.user.readonly',
+    'https://www.googleapis.com/auth/admin.reports.audit.readonly'
+]
+ADMIN_EMAIL = os.getenv("GOOGLE_ADMIN_EMAIL")
 
 if not API_KEY or not API_SECRET:
     print("API_KEY and API_SECRET must be set in the .env file")
@@ -100,6 +114,45 @@ def check_microsoft_oauth_grants(user_email, access_token):
         print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
         return None
 
+def get_active_tokens_for_user(user_email):
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        
+        delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
+
+        service = build('admin', 'reports_v1', credentials=delegated_credentials)
+
+        results = service.activities().list(
+            userKey=user_email,
+            applicationName='token',
+            maxResults=100
+        ).execute()
+
+        activities = results.get('items', [])
+        
+        active_tokens_for_user = []
+        for activity in activities:
+            actor_email = activity.get('actor', {}).get('email')
+            if actor_email == user_email:
+                for event in activity.get('events', []):
+                    if event.get('type') == 'authorize' or event.get('name') == 'token_authorize':
+                        for param in event.get('parameters', []):
+                            if param.get('name') == 'application_name':
+                                app_name = param.get('value')
+                                active_tokens_for_user.append({
+                                    'application': app_name,
+                                    'timestamp': activity.get('id', {}).get('time')
+                                })
+        return active_tokens_for_user
+
+    except HttpError as err:
+        print(f"API Greška: {err}")
+        return None
+    except Exception as e:
+        print(f"Opšta greška: {e}")
+        return None
+
 def main():
     leavers = get_employees_who_left(days_back=30)
     if not leavers:
@@ -119,15 +172,27 @@ def main():
         if not email:
             continue
 
+        # Microsoft provera
         ms_grants = check_microsoft_oauth_grants(email, ms_token)
         if ms_grants is None:
             print("Provera nije uspela (moguć problem sa pristupom).")
-            continue
-
-        if ms_grants:
-            create_access_audit_allert(name, email, "M365", "High")
         else:
-            print(f"Nema aktivnih Microsoft tokena.")
+            if ms_grants:
+                create_access_audit_allert(name, email, "M365", "High")
+            else:
+                print(f"Nema aktivnih Microsoft tokena.")
+
+        # Google provera
+        google_tokens = get_active_tokens_for_user(email)
+        if google_tokens is None:
+            print(f"Došlo je do greške pri komunikaciji sa Google API-jem za {email}.")
+        elif not google_tokens:
+            print(f"Korisnik {email} nema aktivnih OAuth tokena (prema istoriji).")
+        else:
+            print(f"Korisnik {email} ima aktivne tokene za {len(google_tokens)} aplikacija:")
+            for t in google_tokens:
+                print(f"- {t['application']} (od: {t['timestamp']})")
+                create_access_audit_allert(name, email, f"Google:{t['application']}", "High")
 
 if __name__ == "__main__":
     main()
