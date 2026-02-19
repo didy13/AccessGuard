@@ -1,19 +1,18 @@
 import requests
+import sys
 import json
 import os
 from dotenv import load_dotenv
-from datetime import datetime
-from google.oauth2 import service_account
-import google.auth.transport.requests
+from datetime import datetime, timedelta
 
 load_dotenv()
 
-BASE_URL = os.getenv("FRAPPE_URL")
+BASE_URL = os.getenv("BASE_URL")
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
-TENANT_ID = os.getenv("TENANT_ID")
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
+MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
 
 if not API_KEY or not API_SECRET:
     print("API_KEY and API_SECRET must be set in the .env file")
@@ -21,12 +20,18 @@ if not API_KEY or not API_SECRET:
 
 frappe_headers = {
     "Authorization": f"token {API_KEY}:{API_SECRET}",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
 }
 
-def get_employees_who_left():
-    filters = json.dumps([["Employee", "status", "=", "Left"]])
+def get_employees_who_left(days_back = 30):
+    from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    filters = json.dumps([
+        ["status", "=", "Left"],
+        ["relieving_date", ">=", from_date]
+    ])
 
-    fields = json.dumps(["name", "employee_name", "company_email", "status"])
+    fields = json.dumps(["name", "employee_name", "company_email", "relieving_date", "status"])
 
     url = f"{BASE_URL}/api/resource/Employee?filters={filters}&fields={fields}"
 
@@ -37,91 +42,27 @@ def get_employees_who_left():
     else:
         print(f"Greska: {response.text}")
         return []
-    
 
-
-# --- Frappe part ---
-def get_frappe_logged_user(base_url, token):
-    url = f"{base_url}/api/method/frappe.auth.get_logged_user"
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()["message"]
-
-# --- Microsoft part ---
-def get_microsoft_graph_token():
-    if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
-        raise ValueError("Missing Microsoft credentials. Please set TENANT_ID, CLIENT_ID, and CLIENT_SECRET in your .env file.")
-
-    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+def get_microsoft_access_token(MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET):
+    url = f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}/oauth2/v2.0/token"
     data = {
         "grant_type": "client_credentials",
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET, # Secret is read from env, not hardcoded
+        "client_id": MICROSOFT_CLIENT_ID,
+        "client_secret": MICROSOFT_CLIENT_SECRET,
         "scope": "https://graph.microsoft.com/.default"
     }
-    response = requests.post(url, data=data)
-    response.raise_for_status()
-    return response.json()["access_token"]
-
-def get_microsoft_graph_tokens(user_email, access_token):
-    url = f"https://graph.microsoft.com/v1.0/users/{user_email}/oauth2PermissionGrants"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 200:
-        return resp.json().get("value", [])
-    return []
-
-def get_google_admin_token(service_account_file, impersonate_email, scopes):
-    credentials = service_account.Credentials.from_service_account_file(
-        service_account_file,
-        scopes=scopes,
-        subject=impersonate_email
-    )
-    request = google.auth.transport.requests.Request()
-    credentials.refresh(request)
-    return credentials.token
-
-def get_google_tokens(user_email, access_token):
-    url = f"https://admin.googleapis.com/admin/directory/v1/users/{user_email}/tokens"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 200:
-        return resp.json().get("items", [])
-    return []
-
-# --- Main execution ---
-if __name__ == "__main__":
-    # Frappe credentials
-    frappe_base = "https://your-frappe.com"
-    frappe_token = "your-frappe-bearer-token"
-
-    # Microsoft Azure AD credentials
-    ms_tenant = "your-tenant-id"
-    ms_client_id = "your-client-id"
-    ms_client_secret = "your-client-secret"
-
-    # Google service account
-    google_sa_file = "path/to/service-account.json"
-    google_admin_email = "admin@yourdomain.com"  # An admin with directory read privileges
-    google_scopes = ["https://www.googleapis.com/auth/admin.directory.user.security"]
-
-    # Get logged-in user from Frappe
-    user = get_frappe_logged_user(frappe_base, frappe_token)
-    print(f"Logged-in user: {user}")
-
-    # Microsoft tokens
-    ms_token = get_microsoft_graph_token(ms_tenant, ms_client_id, ms_client_secret)
-    ms_grants = get_microsoft_graph_tokens(user, ms_token)
-    print("Microsoft grants:", ms_grants)
-
-    # Google tokens
-    google_token = get_google_admin_token(google_sa_file, google_admin_email, google_scopes)
-    google_items = get_google_tokens(user, google_token)
-    print("Google tokens:", google_items)
+    try:
+        response = requests.post(url, data=data, timeout=30)
+        response.raise_for_status()
+        token = response.json()["access_token"]
+        print("Microsoft access token uspešno dobijen.")
+        return token
+    except requests.exceptions.RequestException as e:
+        print(f"Greška pri dobijanju Microsoft tokena: {e}")
+        return None
 
 def create_access_audit_allert(employee_name, email, saas_app, risk="High"):
-    url = f"{BASE_URL}/api/resource/Access Audit Alert List"
+    url = f"{BASE_URL}/api/resource/Access Audit Alert"
     data = {
         "employee_name": employee_name,
         "email": email,
@@ -138,20 +79,55 @@ def create_access_audit_allert(employee_name, email, saas_app, risk="High"):
             return response.json()
         else:
             print(f"Error creating alert: {reponse.text}")
+            return None
         
     except Exception as e:
         print(f"Exception occurred: {str(e)}")
+        return None
 
-leavers = get_employees_who_left()
-for person in leavers:
-    print(f"{person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
-    email = person.get("company_email") 
-    name = person.get("employee_name")
+def check_microsoft_oauth_grants(user_email, access_token):
+    url = f"https://graph.microsoft.com/v1.0/users/{user_email}/oauth2PermissionGrants"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            grants = response.json().get("value", [])
+            return grants
+        else:
+            print(f"Microsoft API greška za {user_email}: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
+        return None
 
-    ms_gaps = get_microsoft_graph_tokens(email, ms_token)
-    if ms_gaps:
-        create_access_audit_allert(name, email, "M365", "High")
+def main():
+    leavers = get_employees_who_left(days_back=30)
+    if not leavers:
+        print("Nema zaposlenih za proveru.")
+        return
     
-    google_tokens = get_google_tokens(email, google_token)
-    if google_tokens:
-        create_access_audit_allert(name, email, "Google", "High")
+    ms_token = get_microsoft_access_token(MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET)
+    if not ms_token:
+        print("Ne mogu da nastavim bez Microsoft tokena.")
+        exit()
+
+    for person in leavers:
+        print(f"{person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
+        email = person.get("company_email") 
+        name = person.get("employee_name")
+
+        if not email:
+            continue
+
+        ms_grants = check_microsoft_oauth_grants(email, ms_token)
+        if ms_grants is None:
+            print("Provera nije uspela (moguć problem sa pristupom).")
+            continue
+
+        if ms_grants:
+            create_access_audit_allert(name, email, "M365", "High")
+        else:
+            print(f"Nema aktivnih Microsoft tokena.")
+
+if __name__ == "__main__":
+    main()
