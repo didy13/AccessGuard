@@ -46,7 +46,7 @@ Nas sistem se sastoji od nekoliko kontejnera koji rade zajedno:
 Jedan lapotop ce da bude host koji pokrece docker, dok ce ostali biti klijenti koji se povezuju
 
     1. **Host**:
-        Preko ngrok htto 8000 dobijam link sa interneta preko koga ce klijenti da se povezu
+        U terminalu u kontejneru startuje bench --site development.localhost ngrok --bind-tls
     2. **Klijenti**:
         U python scripti:
             BASE_RUL: "link koji host prosledjuje"
