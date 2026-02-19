@@ -72,7 +72,6 @@ def get_microsoft_graph_tokens(user_email, access_token):
         return resp.json().get("value", [])
     return []
 
-
 def get_google_admin_token(service_account_file, impersonate_email, scopes):
     credentials = service_account.Credentials.from_service_account_file(
         service_account_file,
