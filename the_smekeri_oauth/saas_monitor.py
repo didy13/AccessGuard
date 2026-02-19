@@ -4,6 +4,8 @@ import json
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 load_dotenv()
 
@@ -13,6 +15,8 @@ API_SECRET = os.getenv("API_SECRET")
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
+GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+GOOGLE_ADMIN_EMAIL = os.getenv("GOOGLE_ADMIN_EMAIL")
 
 if not API_KEY or not API_SECRET:
     print("API_KEY and API_SECRET must be set in the .env file")
@@ -100,6 +104,45 @@ def check_microsoft_oauth_grants(user_email, access_token):
         print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
         return None
 
+# Google
+def get_google_service(admin_email):
+    """
+    Build and return a Google Admin SDK Directory service
+    using a service account with domain-wide delegation.
+    """
+    SCOPES = [
+        'https://www.googleapis.com/auth/admin.directory.user.readonly',
+        'https://www.googleapis.com/auth/admin.directory.user.security'
+    ]
+
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            GOOGLE_SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        )
+        # Delegate to the admin user
+        delegated_credentials = credentials.with_subject(admin_email)
+        service = build('admin', 'directory_v1', credentials=delegated_credentials)
+        print("Google Admin SDK service created successfully.")
+        return service
+    except Exception as e:
+        print(f"Error creating Google service: {e}")
+        return None
+
+def check_google_oauth_tokens(user_email, service):
+    """
+    Retrieve all OAuth2 tokens (authorized apps) for a given user.
+    Returns a list of tokens or None if an error occurs.
+    """
+    try:
+        # Call the tokens.list method
+        results = service.tokens().list(userKey=user_email).execute()
+        tokens = results.get('items', [])
+        return tokens
+    except Exception as e:
+        print(f"Error checking Google tokens for {user_email}: {e}")
+        return None
+
+
 def main():
     leavers = get_employees_who_left(days_back=30)
     if not leavers:
@@ -128,6 +171,30 @@ def main():
             create_access_audit_allert(name, email, "M365", "High")
         else:
             print(f"Nema aktivnih Microsoft tokena.")
+    
+    # Google part
+    google_service = get_google_service(GOOGLE_ADMIN_EMAIL)
+    if not google_service:
+        print("Ne mogu da nastavim bez Google servisa.")
+        # Decide if you want to exit or just skip Google checks
+        # exit()  # uncomment if Google check is mandatory
+
+    for person in leavers:
+        print(f"{person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
+        email = person.get("company_email")
+        name = person.get("employee_name")
+
+        if not email:
+            continue
+    
+        if google_service:
+            google_tokens = check_google_oauth_tokens(email, google_service)
+            if google_tokens is None:
+                print("Provera Google nije uspela.")
+            elif google_tokens:
+                create_access_audit_allert(name, email, "Google Workspace", "High")
+            else:
+                print(f"Nema aktivnih Google tokena.")
 
 if __name__ == "__main__":
     main()
