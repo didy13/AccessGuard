@@ -72,7 +72,7 @@
 ### Kako funkcioniše saas_monitor.py
 
     Svaki put kad se pokrene:
-        1. Povezuje se na Frappe i uzima zaposlene sa statusom  u poslednjih 30 dana
+        1. Povezuje se na Frappe i uzima zaposlene sa statusom Left u poslednjih 30 dana
         2. Dobija access tokene za Microsoft Graph
         3. Za svakog zaposlenog poziva GET oauth2PermissionGrants
         4. Ako pronađe grent pravi Access Audit Alert u Frappe-u za tog korisnika
