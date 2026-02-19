@@ -7,19 +7,6 @@ Ovaj projekat sluzi za automatsku detekciju "Access Gap-a"
 Ovaj repositorijum koristi **Docker** kao bazu za nas SaaS Monitor, on nam omogucava da imamo identicno
 serversko okruzenje
 
-## Kako pokrenuti
-
-    1. Instalirati **Docker Desktop**  i **VS Code**
-    2. Instalirati VS Code ekstenziju 'Dev Containers'
-    3. Otvorite ovaj folder u VS Code-u
-    4. Obavezno promeni CRLF u LF za setup.sh
-    4. Kliknite "Reopen in Container"
-    5. Provera python verzije u terminalu:
-        1. python --version (ukoliko nije 3.11.9 uradi dalje)
-        2. pyenv versions (ukoliko nema 3.11.9 instaliraj je posebno)
-        3. pyenv local 3.11.9
-    6. Sacekajte da se otvori i u tom trenutku vas server ce biti spreman na portu '8000'
-
 ## Pokretanje saas_monitor.py
     1. Instalirati python 3.x.x
     2. Pokrenuti komandu u folderu: python -m pip install -r requirements.txt
@@ -39,6 +26,7 @@ Nas sistem se sastoji od nekoliko kontejnera koji rade zajedno:
         Unutar terminala:
             cd frappe-bench
             bench start
+            bench --site development.localhost ngrok --bind-tls
     
     Sajt ce biti onda dostupan na http://development.localhost:8000
 
@@ -46,7 +34,7 @@ Nas sistem se sastoji od nekoliko kontejnera koji rade zajedno:
 Jedan lapotop ce da bude host koji pokrece docker, dok ce ostali biti klijenti koji se povezuju
 
     1. **Host**:
-        U terminalu u kontejneru startuje bench --site development.localhost ngrok --bind-tls
+        Startuje frappe_docker i pokrece ngrok
     2. **Klijenti**:
         U python scripti:
             BASE_RUL: "link koji host prosledjuje"
