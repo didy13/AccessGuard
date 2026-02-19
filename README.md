@@ -48,7 +48,7 @@
 
 ### Podešavanje .env
 
-    1. U folderu the_smekeri_oauth/ kreirati .env sa sledećim sadržajem:
+    U folderu the_smekeri_oauth/ kreirati .env sa sledećim sadržajem:
 
         # Frappe
         BASE_URL=http://development.localhost:8000   # ili ngrok URL
