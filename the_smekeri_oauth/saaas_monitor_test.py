@@ -31,7 +31,7 @@ def get_employees_who_left(days_back = 30):
         ["relieving_date", ">=", from_date]
     ])
 
-    fields = json.dumps(["name", "employee_name", "company_email", "relieving_date"])
+    fields = json.dumps(["name", "employee_name", "company_email", "relieving_date", "status"])
 
     url = f"{BASE_URL}/api/resource/Employee?filters={filters}&fields={fields}"
 
