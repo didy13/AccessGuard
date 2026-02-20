@@ -83,3 +83,11 @@
         1. Skripta će tražiti unos email-a korisnika
         2. Prikazaće pronađene grentove
         3. Na kraju će imati ispis koliko je gratova izbrisala a koliko je neuspešnih pokušaja imala
+
+### Kako staviti tokene preko powershell
+
+    Microsoft:
+        1. Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Force
+        2. Import-Module Microsoft.Graph.Authentication
+        3. Posle toga porkenuti u drugom powershell-u sve sto je sacuvano u powershell-runAzure.txt
+        **Napomena** ukoliko ne prihvata komande pokrenuti powershell kao administrator
