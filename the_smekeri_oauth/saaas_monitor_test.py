@@ -183,16 +183,18 @@ def main():
                 print(f"Nema aktivnih Microsoft tokena.")
 
         # Google provera
-        google_tokens = get_active_tokens_for_user(email)
-        if google_tokens is None:
-            print(f"Došlo je do greške pri komunikaciji sa Google API-jem za {email}.")
-        elif not google_tokens:
-            print(f"Korisnik {email} nema aktivnih OAuth tokena (prema istoriji).")
-        else:
-            print(f"Korisnik {email} ima aktivne tokene za {len(google_tokens)} aplikacija:")
-            for t in google_tokens:
-                print(f"- {t['application']} (od: {t['timestamp']})")
-                create_access_audit_allert(name, email, f"Google:{t['application']}", "High")
+        email_domen = email.split('@')[1]
+        if email_domen == "thesmekeri.biz":
+            google_tokens = get_active_tokens_for_user(email)
+            if google_tokens is None:
+                print(f"Došlo je do greške pri komunikaciji sa Google API-jem za {email}.")
+            elif not google_tokens:
+                print(f"Korisnik {email} nema aktivnih OAuth tokena (prema istoriji).")
+            else:
+                print(f"Korisnik {email} ima aktivne tokene za {len(google_tokens)} aplikacija:")
+                for t in google_tokens:
+                    print(f"- {t['application']} (od: {t['timestamp']})")
+                    create_access_audit_allert(name, email, f"Google:{t['application']}", "High")
 
 if __name__ == "__main__":
     main()
