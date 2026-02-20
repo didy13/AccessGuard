@@ -21,12 +21,12 @@ MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
 
 #Google
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
 SCOPES = [
     'https://www.googleapis.com/auth/admin.directory.user.readonly',
     'https://www.googleapis.com/auth/admin.reports.audit.readonly'
 ]
-ADMIN_EMAIL = os.getenv("GOOGLE_ADMIN_EMAIL")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
 if not API_KEY or not API_SECRET:
     print("API_KEY and API_SECRET must be set in the .env file")
