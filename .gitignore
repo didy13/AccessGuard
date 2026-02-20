@@ -2,3 +2,4 @@ frappe_docker/
 the_smekeri_oauth/.env
 the_smekeri_oauth/google.json
 powershell-runAzure.txt
+Set-ExecutionPolicy -ExecutionPolic.txt
