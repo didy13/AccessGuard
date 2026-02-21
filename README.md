@@ -2,7 +2,7 @@
 
     Ovaj projekat sluzi za automatsku detekciju "Access Gap-a", sastoji se od:
     - Frappe backend‑a (sa HRMS aplikacijom) – izvor podataka o zaposlenima.
-    - Python monitora (`saas_monitor.py`) koji periodično proverava zaposlene sa statusom `Left` i ispituje Microsoft Graph API za aktivne tokene.
+    - Python monitora (`saas_monitor.py`) koji periodično proverava zaposlene sa statusom `Left` i ispituje Microsoft Graph API i Google Admin SDK API za aktivne tokene.
     - Pomoćne skripte (`revoke_users_token.py`) za ručno brisanje svih OAuth grantova za određenog korisnika.
 
 ## Docker
