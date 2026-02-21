@@ -2,6 +2,8 @@ import requests
 import sys
 import json
 import os
+import schedule
+import time
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
@@ -297,5 +299,9 @@ def main():
                     risk="High"
                 )
 
+schedule.every(15).minutes.do(main)
+
 if __name__ == "__main__":
-    main()
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
