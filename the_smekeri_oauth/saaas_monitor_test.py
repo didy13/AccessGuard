@@ -119,7 +119,7 @@ def get_active_tokens_for_user(user_email):
         credentials = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES)
         
-        delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
+        delegated_credentials = credentials.with_subject(user_email)
 
         service = build('admin', 'reports_v1', credentials=delegated_credentials)
 
