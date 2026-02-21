@@ -26,7 +26,7 @@ MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
 SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
 SCOPES = [
     'https://www.googleapis.com/auth/admin.directory.user.readonly',
-    'https://www.googleapis.com/auth/admin.reports.audit.readonly'
+    'https://www.googleapis.com/auth/admin.directory.user.security'
 ]
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
@@ -233,6 +233,94 @@ def get_active_tokens_for_user(user_email):
         print(f"Opšta greška za {user_email}: {e}")
         return None
 
+def revoke_microsoft_sessions(user_email, access_token):
+    url = f"https://graph.microsoft.com/v1.0/users/{user_email}/revokeSignInSessions"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        response = requests.post(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            print(f"Uspešno opozvane sesije za {user_email}")
+            return True
+        else:
+            print(f"Greška pri opozivu sesija za {user_email}: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"Izuzetak pri opozivu sesija za {user_email}: {e}")
+        return False
+
+def delete_microsoft_oauth_grants(user_email, access_token):
+    list_url = f"https://graph.microsoft.com/v1.0/users/{user_email}/oauth2PermissionGrants"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        resp = requests.get(list_url, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            print(f"Ne mogu da dobavim grantove za {user_email}: {resp.text}")
+            return False
+        grants = resp.json().get("value", [])
+        if not grants:
+            print(f"Nema OAuth grantova za {user_email}")
+            return True  # nema šta da se briše
+
+        for grant in grants:
+            grant_id = grant.get("id")
+            if grant_id:
+                del_url = f"https://graph.microsoft.com/v1.0/oauth2PermissionGrants/{grant_id}"
+                del_resp = requests.delete(del_url, headers=headers, timeout=30)
+                if del_resp.status_code == 204:
+                    print(f"Obrisan grant {grant_id} za {user_email}")
+                else:
+                    print(f"Greška pri brisanju granta {grant_id}: {del_resp.text}")
+        return True
+    except Exception as e:
+        print(f"Izuzetak pri brisanju grantova za {user_email}: {e}")
+        return False
+
+def list_google_tokens(user_email):
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
+        service = build('admin', 'directory_v1', credentials=delegated_credentials)
+
+        results = service.tokens().list(userKey=user_email).execute()
+        tokens = results.get('items', [])
+        return tokens
+    except HttpError as err:
+        print(f"Google API greška pri listanju tokena za {user_email}: {err}")
+        if err.resp.status == 403:
+            print("Proverite domain-wide delegation i opsege.")
+        return None
+    except Exception as e:
+        print(f"Opšta greška pri listanju tokena za {user_email}: {e}")
+        return None
+
+def revoke_google_tokens(user_email):
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
+        service = build('admin', 'directory_v1', credentials=delegated_credentials)
+
+        tokens = list_google_tokens(user_email)
+        if tokens is None:
+            return False
+        if not tokens:
+            print(f"Nema Google tokena za {user_email}")
+            return True
+
+        for token in tokens:
+            client_id = token.get('clientId')
+            if client_id:
+                try:
+                    service.tokens().delete(userKey=user_email, clientId=client_id).execute()
+                    print(f"Obrisan token za klijent {client_id} korisnika {user_email}")
+                except HttpError as e:
+                    print(f"Greška pri brisanju tokena {client_id}: {e}")
+        return True
+    except Exception as e:
+        print(f"Izuzetak pri brisanju Google tokena za {user_email}: {e}")
+        return False
+
 def main():
     leavers = get_employees_who_left(days_back=30)
     if not leavers:
@@ -255,53 +343,48 @@ def main():
         # Microsoft provera
         ms_tokens = check_microsoft_oauth_grants(email, ms_token)
         if ms_tokens is None:
-            print(" Provera nije uspela (moguć problem sa pristupom).")
+            print("Microsoft provera nije uspela.")
         else:
             ms_count = len(ms_tokens) if ms_tokens else 0
             if ms_count > 0:
                 print(f"Pronađeno {ms_count} aktivnih Microsoft tokena!")
-                ms_details = []
-                for grant in ms_tokens:
-                    ms_details.append({
-                        'application': f"Client: {grant.get('clientId', 'Unknown')[:8]}...",
-                        'timestamp': datetime.now().isoformat()
-                    })
-
-                create_consolidated_alert(
-                    employee_name=name,
-                    email=email,
-                    saas_app="M365",
-                    token_count=ms_count,
-                    token_details=ms_details,
-                    risk="High"
-                )
+                if revoke_microsoft_sessions(email, ms_token):
+                    print("Uspešno opozvane sesije.")
+                if delete_microsoft_oauth_grants(email, ms_token):
+                    print("Uspešno obrisani OAuth grantovi.")
+                ms_details = [{'application': f"Client: {g.get('clientId', 'Unknown')[:8]}...", 'timestamp': datetime.now().isoformat()} for g in ms_tokens]
+                create_consolidated_alert(name, email, "M365", ms_count, ms_details, "High")
             else:
-                print(f"Nema aktivnih Microsoft tokena.")
-
+                print("Nema aktivnih Microsoft tokena.")
+        
         # Google provera
         if email.endswith('@thesmekeri.biz'):
-            google_tokens = get_active_tokens_for_user(email)
-            
+            google_tokens = list_google_tokens(email) 
             if google_tokens is None:
-                print(f"Došlo je do greške pri komunikaciji sa Google API-jem.")
+                print("Google provera nije uspela.")
             elif not google_tokens:
-                print(f"Nema aktivnih Google OAuth tokena.")
+                print("Nema aktivnih Google tokena.")
             else:
                 google_count = len(google_tokens)
-                print(f"Pronađeno {google_count} aktivnih Google tokena!")
-                
-                create_consolidated_alert(
-                    employee_name=name,
-                    email=email,
-                    saas_app="Google Workspace",
-                    token_count=google_count,
-                    token_details=google_tokens,
-                    risk="High"
-                )
+                print(f" Pronađeno {google_count} aktivnih Google tokena!")
+                if revoke_google_tokens(email):
+                    print("Uspešno obrisani svi Google tokeni.")
+                google_details = []
+                for token in google_tokens:
+                    app = token.get('displayText', 'Unknown App')
+                    client_id = token.get('clientId', '')
+                    if not app and client_id:
+                        app = f"Client: {client_id[:8]}..."
+                    google_details.append({
+                        'application': app,
+                        'timestamp': datetime.now().isoformat()
+                    })
+                create_consolidated_alert(name, email, "Google Workspace", google_count, google_details, "High")
 
 schedule.every(15).minutes.do(main)
 
 if __name__ == "__main__":
+    main()
     while True:
         schedule.run_pending()
         time.sleep(1)
