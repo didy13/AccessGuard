@@ -75,30 +75,6 @@ def get_microsoft_access_token(MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSO
         print(f"Greška pri dobijanju Microsoft tokena: {e}")
         return None
 
-def create_access_audit_allert(employee_name, email, saas_app, risk="High"):
-    url = f"{BASE_URL}/api/resource/Access Audit Alert"
-    data = {
-        "employee_name": employee_name,
-        "email": email,
-        "saas_app": saas_app,
-        "risk": risk,
-        "detection_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-    try:
-        response = requests.post(url, headers=frappe_headers, json=data)
-
-        if response.status_code == 200:
-            print(f"Alert created for {employee_name} - {saas_app}")
-            return response.json()
-        else:
-            print(f"Error creating alert: {response.text}")
-            return None
-        
-    except Exception as e:
-        print(f"Exception occurred: {str(e)}")
-        return None
-
 def check_microsoft_oauth_grants(user_email, access_token):
     url = f"https://graph.microsoft.com/v1.0/users/{user_email}/oauth2PermissionGrants"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -114,43 +90,145 @@ def check_microsoft_oauth_grants(user_email, access_token):
         print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
         return None
 
+def create_consolidated_alert(employee_name, email, saas_app, token_count, token_details=None, risk="High"):
+    url = f"{BASE_URL}/api/resource/Access Audit Alert"
+    
+    description = ""
+    if token_details and len(token_details) > 0:
+        app_counts = {}
+        for token in token_details:
+            app = token.get('application', 'Nepoznata aplikacija')
+            app_counts[app] = app_counts.get(app, 0) + 1
+        
+        description = f"Pronađeno {token_count} aktivnih tokena:\n"
+        for app, count in sorted(app_counts.items(), key=lambda x: x[1], reverse=True)[:10]:  # Prvih 10 aplikacija
+            description += f"  • {app}: {count} tokena\n"
+        
+        if len(app_counts) > 10:
+            description += f"  • ... i još {len(app_counts) - 10} aplikacija\n"
+
+        timestamps = [t.get('timestamp') for t in token_details if t.get('timestamp')]
+        if timestamps:
+            latest = max(timestamps)
+            description += f"\nNajnoviji token: {latest}"
+    else:
+        description = f"Pronađeno {token_count} aktivnih OAuth tokena za {saas_app}"
+    
+    data = {
+        "employee_name": employee_name,
+        "email": email,
+        "saas_app": f"{saas_app} ({token_count} tokena)",
+        "risk": risk,
+        "detection_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "description": description
+    }
+
+    try:
+        response = requests.post(url, headers=frappe_headers, json=data)
+
+        if response.status_code == 200:
+            print(f"Alert created for {employee_name} - {saas_app} ({token_count} tokena)")
+            return response.json()
+        else:
+            print(f"Error creating alert: {response.text}")
+            return None
+        
+    except Exception as e:
+        print(f"Exception occurred: {str(e)}")
+        return None
+
+def get_application_name_from_client_id(client_id):
+    popular_apps = {
+        '407408718192.apps.googleusercontent.com': 'Google OAuth Playground',
+        '105463346172544199422': 'saas_monitor',
+        '77185425430-npn6h6q1h5k5j5k5j5k5j5k5j5k5j5k5.apps.googleusercontent.com': 'Google Chrome',
+        '618104702990-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Google Cloud Shell',
+        '32555940559-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Google Cloud SDK',
+        '107000923456-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Android device',
+    }
+    return popular_apps.get(client_id, None)
+
 def get_active_tokens_for_user(user_email):
     try:
         credentials = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        
+
         delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
 
         service = build('admin', 'reports_v1', credentials=delegated_credentials)
 
         results = service.activities().list(
-            userKey=user_email,
+            userKey='all',
             applicationName='token',
-            maxResults=100
+            maxResults=500
         ).execute()
 
         activities = results.get('items', [])
         
         active_tokens_for_user = []
         for activity in activities:
-            actor_email = activity.get('actor', {}).get('email')
-            if actor_email == user_email:
+            actor_email = activity.get('actor', {}).get('email', '')
+            if actor_email.lower() == user_email.lower():
+                
                 for event in activity.get('events', []):
-                    if event.get('type') == 'authorize' or event.get('name') == 'token_authorize':
+                    event_type = event.get('type', '').lower()
+                    event_name = event.get('name', '').lower()
+                    
+                    token_keywords = ['authorize', 'token', 'oauth', 'grant', 'consent', 'issue']
+                    
+                    is_token_event = any(
+                        keyword in event_type or keyword in event_name 
+                        for keyword in token_keywords
+                    )
+                    
+                    if is_token_event:
+                        token_info = {
+                            'application': 'Unknown App',
+                            'timestamp': activity.get('id', {}).get('time'),
+                            'client_id': None,
+                            'scopes': []
+                        }
+
                         for param in event.get('parameters', []):
-                            if param.get('name') == 'application_name':
-                                app_name = param.get('value')
-                                active_tokens_for_user.append({
-                                    'application': app_name,
-                                    'timestamp': activity.get('id', {}).get('time')
-                                })
+                            param_name = param.get('name')
+                            param_value = param.get('value', '')
+                            
+                            if param_name == 'application_name':
+                                token_info['application'] = param_value
+                            elif param_name == 'client_id':
+                                token_info['client_id'] = param_value
+                                if token_info['application'] == 'Unknown App' and param_value:
+                                    known_app = get_application_name_from_client_id(param_value)
+                                    if known_app:
+                                        token_info['application'] = known_app
+                                    else:
+                                        token_info['application'] = f'Client: {param_value[:8]}...'
+                            elif param_name == 'scope':
+                                token_info['scopes'] = param_value.split() if param_value else []
+                            elif param_name == 'app_name':
+                                token_info['application'] = param_value
+                            elif param_name == 'service_name':
+                                if token_info['application'] == 'Unknown App':
+                                    token_info['application'] = param_value
+                            elif param_name == 'oauth_client_name':
+                                token_info['application'] = param_value
+
+                        if token_info['application'] == 'Unknown App' and token_info['scopes']:
+                            scopes_str = ' '.join(token_info['scopes'])
+                            if 'playground' in scopes_str.lower():
+                                token_info['application'] = 'Google OAuth Playground'
+                        
+                        active_tokens_for_user.append(token_info)
+        
         return active_tokens_for_user
 
     except HttpError as err:
-        print(f"API Greška: {err}")
+        print(f"Google API Greška za {user_email}: {err}")
+        if err.resp.status == 403:
+            print("Verovatno domain-wide delegation nije ispravno podešen!")
         return None
     except Exception as e:
-        print(f"Opšta greška: {e}")
+        print(f"Opšta greška za {user_email}: {e}")
         return None
 
 def main():
@@ -173,28 +251,51 @@ def main():
             continue
 
         # Microsoft provera
-        ms_grants = check_microsoft_oauth_grants(email, ms_token)
-        if ms_grants is None:
-            print("Provera nije uspela (moguć problem sa pristupom).")
+        ms_tokens = check_microsoft_oauth_grants(email, ms_token)
+        if ms_tokens is None:
+            print(" Provera nije uspela (moguć problem sa pristupom).")
         else:
-            if ms_grants:
-                create_access_audit_allert(name, email, "M365", "High")
+            ms_count = len(ms_tokens) if ms_tokens else 0
+            if ms_count > 0:
+                print(f"Pronađeno {ms_count} aktivnih Microsoft tokena!")
+                ms_details = []
+                for grant in ms_tokens:
+                    ms_details.append({
+                        'application': f"Client: {grant.get('clientId', 'Unknown')[:8]}...",
+                        'timestamp': datetime.now().isoformat()
+                    })
+
+                create_consolidated_alert(
+                    employee_name=name,
+                    email=email,
+                    saas_app="M365",
+                    token_count=ms_count,
+                    token_details=ms_details,
+                    risk="High"
+                )
             else:
                 print(f"Nema aktivnih Microsoft tokena.")
 
         # Google provera
-        email_domen = email.split('@')[1]
-        if email_domen == "thesmekeri.biz":
+        if email.endswith('@thesmekeri.biz'):
             google_tokens = get_active_tokens_for_user(email)
+            
             if google_tokens is None:
-                print(f"Došlo je do greške pri komunikaciji sa Google API-jem za {email}.")
+                print(f"Došlo je do greške pri komunikaciji sa Google API-jem.")
             elif not google_tokens:
-                print(f"Korisnik {email} nema aktivnih OAuth tokena (prema istoriji).")
+                print(f"Nema aktivnih Google OAuth tokena.")
             else:
-                print(f"Korisnik {email} ima aktivne tokene za {len(google_tokens)} aplikacija:")
-                for t in google_tokens:
-                    print(f"- {t['application']} (od: {t['timestamp']})")
-                    create_access_audit_allert(name, email, f"Google:{t['application']}", "High")
+                google_count = len(google_tokens)
+                print(f"Pronađeno {google_count} aktivnih Google tokena!")
+                
+                create_consolidated_alert(
+                    employee_name=name,
+                    email=email,
+                    saas_app="Google Workspace",
+                    token_count=google_count,
+                    token_details=google_tokens,
+                    risk="High"
+                )
 
 if __name__ == "__main__":
     main()

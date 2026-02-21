@@ -6,17 +6,27 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 load_dotenv()
 
+# Frappe
 BASE_URL = os.getenv("BASE_URL")
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
+
+# Azure
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
-GOOGLE_ADMIN_EMAIL = os.getenv("GOOGLE_ADMIN_EMAIL")
+
+# Google
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
+SCOPES = [
+    'https://www.googleapis.com/auth/admin.directory.user.readonly',
+    'https://www.googleapis.com/auth/admin.reports.audit.readonly'
+]
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
 if not API_KEY or not API_SECRET:
     print("API_KEY and API_SECRET must be set in the .env file")
@@ -28,7 +38,7 @@ frappe_headers = {
     "Content-Type": "application/json",
 }
 
-def get_employees_who_left(days_back = 30):
+def get_employees_who_left(days_back=30):
     from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
     filters = json.dumps([
         ["status", "=", "Left"],
@@ -44,7 +54,7 @@ def get_employees_who_left(days_back = 30):
     if response.status_code == 200:
         return response.json().get("data", [])
     else:
-        print(f"Greska: {response.text}")
+        print(f"Greška: {response.text}")
         return []
 
 def get_microsoft_access_token(MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET):
@@ -65,31 +75,61 @@ def get_microsoft_access_token(MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSO
         print(f"Greška pri dobijanju Microsoft tokena: {e}")
         return None
 
-def create_access_audit_allert(employee_name, email, saas_app, risk="High"):
+def create_consolidated_alert(employee_name, email, saas_app, token_count, token_details=None, risk="High"):
+    """
+    Kreira JEDAN Access Audit Alert po SaaS platformi sa brojem tokena i detaljima
+    """
     url = f"{BASE_URL}/api/resource/Access Audit Alert"
+    
+    # Pripremi detaljan opis ako su prosleđeni detalji
+    description = ""
+    if token_details and len(token_details) > 0:
+        # Grupiši tokene po aplikaciji
+        app_counts = {}
+        for token in token_details:
+            app = token.get('application', 'Nepoznata aplikacija')
+            app_counts[app] = app_counts.get(app, 0) + 1
+        
+        description = f"Pronađeno {token_count} aktivnih tokena:\n"
+        for app, count in sorted(app_counts.items(), key=lambda x: x[1], reverse=True)[:10]:  # Prvih 10 aplikacija
+            description += f"  • {app}: {count} tokena\n"
+        
+        if len(app_counts) > 10:
+            description += f"  • ... i još {len(app_counts) - 10} aplikacija\n"
+        
+        # Dodaj najnoviji timestamp
+        timestamps = [t.get('timestamp') for t in token_details if t.get('timestamp')]
+        if timestamps:
+            latest = max(timestamps)
+            description += f"\nNajnoviji token: {latest}"
+    else:
+        description = f"Pronađeno {token_count} aktivnih OAuth tokena za {saas_app}"
+    
     data = {
         "employee_name": employee_name,
         "email": email,
-        "saas_app": saas_app,
+        "saas_app": f"{saas_app} ({token_count} tokena)",
         "risk": risk,
-        "detection_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "detection_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "description": description  # Ako Frappe nema ovo polje, možeš ukloniti
     }
 
     try:
         response = requests.post(url, headers=frappe_headers, json=data)
 
         if response.status_code == 200:
-            print(f"Alert created for {employee_name} - {saas_app}")
+            print(f"✓ Alert created for {employee_name} - {saas_app} ({token_count} tokena)")
             return response.json()
         else:
-            print(f"Error creating alert: {response.text}")
+            print(f"✗ Error creating alert: {response.text}")
             return None
         
     except Exception as e:
-        print(f"Exception occurred: {str(e)}")
+        print(f"✗ Exception occurred: {str(e)}")
         return None
 
 def check_microsoft_oauth_grants(user_email, access_token):
+    """Proverava Microsoft OAuth grants za korisnika i vraća broj tokena"""
     url = f"https://graph.microsoft.com/v1.0/users/{user_email}/oauth2PermissionGrants"
     headers = {"Authorization": f"Bearer {access_token}"}
     try:
@@ -98,52 +138,165 @@ def check_microsoft_oauth_grants(user_email, access_token):
             grants = response.json().get("value", [])
             return grants
         else:
-            print(f"Microsoft API greška za {user_email}: {response.status_code} - {response.text}")
+            print(f"Microsoft API greška za {user_email}: {response.status_code}")
             return None
     except Exception as e:
         print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
         return None
 
-# Google
-def get_google_service(admin_email):
-    """
-    Build and return a Google Admin SDK Directory service
-    using a service account with domain-wide delegation.
-    """
-    SCOPES = [
-        'https://www.googleapis.com/auth/admin.directory.user.readonly',
-        'https://www.googleapis.com/auth/admin.directory.user.security'
-    ]
+def get_application_name_from_client_id(client_id):
+    """Pomoćna funkcija za prepoznavanje popularnih aplikacija po client_id"""
+    popular_apps = {
+        '407408718192.apps.googleusercontent.com': 'Google OAuth Playground',
+        '105463346172544199422': 'saas_monitor',
+        '77185425430-npn6h6q1h5k5j5k5j5k5j5k5j5k5j5k5.apps.googleusercontent.com': 'Google Chrome',
+        '618104702990-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Google Cloud Shell',
+        '32555940559-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Google Cloud SDK',
+        '107000923456-3v5k5j5k5j5k5j5k5j5k5j5k5j5k5j5.apps.googleusercontent.com': 'Android device',
+    }
+    return popular_apps.get(client_id, None)
 
+def get_active_tokens_for_user(user_email):
+    """
+    Proverava aktivne Google OAuth tokene za korisnika i vraća listu tokena sa detaljima
+    """
     try:
         credentials = service_account.Credentials.from_service_account_file(
-            GOOGLE_SERVICE_ACCOUNT_FILE, scopes=SCOPES
-        )
-        # Delegate to the admin user
-        delegated_credentials = credentials.with_subject(admin_email)
-        service = build('admin', 'directory_v1', credentials=delegated_credentials)
-        print("Google Admin SDK service created successfully.")
-        return service
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        
+        # Impersonifikuj ADMINA (jedini koji ima pravo čitanja audit logova)
+        delegated_credentials = credentials.with_subject(ADMIN_EMAIL)
+
+        service = build('admin', 'reports_v1', credentials=delegated_credentials)
+
+        # Dohvati sve token aktivnosti
+        results = service.activities().list(
+            userKey='all',
+            applicationName='token',
+            maxResults=500
+        ).execute()
+
+        activities = results.get('items', [])
+        
+        active_tokens_for_user = []
+        for activity in activities:
+            # Proveri da li je aktivnost za našeg korisnika
+            actor_email = activity.get('actor', {}).get('email', '')
+            if actor_email.lower() == user_email.lower():
+                
+                for event in activity.get('events', []):
+                    event_type = event.get('type', '').lower()
+                    event_name = event.get('name', '').lower()
+                    
+                    # Proširena lista događaja vezanih za tokene
+                    token_keywords = ['authorize', 'token', 'oauth', 'grant', 'consent', 'issue']
+                    
+                    is_token_event = any(
+                        keyword in event_type or keyword in event_name 
+                        for keyword in token_keywords
+                    )
+                    
+                    if is_token_event:
+                        # Inicijalizuj podatke
+                        token_info = {
+                            'application': 'Unknown App',
+                            'timestamp': activity.get('id', {}).get('time'),
+                            'client_id': None,
+                            'scopes': []
+                        }
+                        
+                        # Prikupi SVE parametre iz događaja
+                        for param in event.get('parameters', []):
+                            param_name = param.get('name')
+                            param_value = param.get('value', '')
+                            
+                            if param_name == 'application_name':
+                                token_info['application'] = param_value
+                            elif param_name == 'client_id':
+                                token_info['client_id'] = param_value
+                                # Ako nemamo naziv aplikacije, probaj da ga izvučeš iz client_id
+                                if token_info['application'] == 'Unknown App' and param_value:
+                                    known_app = get_application_name_from_client_id(param_value)
+                                    if known_app:
+                                        token_info['application'] = known_app
+                                    else:
+                                        token_info['application'] = f'Client: {param_value[:8]}...'
+                            elif param_name == 'scope':
+                                token_info['scopes'] = param_value.split() if param_value else []
+                            elif param_name == 'app_name':
+                                token_info['application'] = param_value
+                            elif param_name == 'service_name':
+                                if token_info['application'] == 'Unknown App':
+                                    token_info['application'] = param_value
+                            elif param_name == 'oauth_client_name':
+                                token_info['application'] = param_value
+                        
+                        # Dodatna provera za OAuth Playground po scope-ovima
+                        if token_info['application'] == 'Unknown App' and token_info['scopes']:
+                            scopes_str = ' '.join(token_info['scopes'])
+                            if 'playground' in scopes_str.lower():
+                                token_info['application'] = 'Google OAuth Playground'
+                        
+                        active_tokens_for_user.append(token_info)
+        
+        return active_tokens_for_user
+
+    except HttpError as err:
+        print(f"✗ Google API Greška za {user_email}: {err}")
+        if err.resp.status == 403:
+            print("  → Verovatno domain-wide delegation nije ispravno podešen!")
+        return None
     except Exception as e:
-        print(f"Error creating Google service: {e}")
+        print(f"✗ Opšta greška za {user_email}: {e}")
         return None
 
-def check_google_oauth_tokens(user_email, service):
-    """
-    Retrieve all OAuth2 tokens (authorized apps) for a given user.
-    Returns a list of tokens or None if an error occurs.
-    """
+def test_google_api_access():
+    """Test funkcija koja proverava pristup Google API-ju"""
+    print("\n=== TEST GOOGLE API PRISTUPA ===")
+    
     try:
-        # Call the tokens.list method
-        results = service.tokens().list(userKey=user_email).execute()
-        tokens = results.get('items', [])
-        return tokens
-    except Exception as e:
-        print(f"Error checking Google tokens for {user_email}: {e}")
-        return None
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        
+        print(f"\n--- Test 1: Pristup sa ADMIN_EMAIL ({ADMIN_EMAIL}) ---")
+        admin_creds = credentials.with_subject(ADMIN_EMAIL)
+        service_admin = build('admin', 'reports_v1', credentials=admin_creds)
 
+        results_admin = service_admin.activities().list(
+            userKey='all',
+            applicationName='login',
+            maxResults=5
+        ).execute()
+
+        print(f"✓ Uspešno! Pronađeno {len(results_admin.get('items', []))} login aktivnosti")
+
+        test_email = "davidkoloski@thesmekeri.biz"
+        print(f"\n--- Test 2: Pristup sa KORISNIKOM ({test_email}) ---")
+
+        try:
+            user_creds = credentials.with_subject(test_email)
+            service_user = build('admin', 'reports_v1', credentials=user_creds)
+
+            results_user = service_user.activities().list(
+                userKey='all',
+                applicationName='token',
+                maxResults=5
+            ).execute()
+
+            print(f"✓ Uspešno! Pronađeno {len(results_user.get('items', []))} token aktivnosti")
+
+        except HttpError as e:
+            print(f"✗ Greška pri pristupu kao korisnik: {e}")
+            if e.resp.status in [401, 403]:
+                print("  → Ovo je OČEKIVANO - običan korisnik nema pravo da čita audit logove!")
+                print("  → Zato u glavnoj funkciji impersonifikujemo ADMIN_EMAIL")
+
+    except Exception as e:
+        print(f"✗ Test neuspešan: {e}")
 
 def main():
+    print("=== POČETAK SKENIRANJA ===\n")
+    
     leavers = get_employees_who_left(days_back=30)
     if not leavers:
         print("Nema zaposlenih za proveru.")
@@ -155,46 +308,78 @@ def main():
         exit()
 
     for person in leavers:
-        print(f"{person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
+        print(f"\n{'='*50}")
+        print(f"👤 {person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
+        print(f"{'='*50}")
+        
         email = person.get("company_email") 
         name = person.get("employee_name")
 
         if not email:
             continue
 
-        ms_grants = check_microsoft_oauth_grants(email, ms_token)
-        if ms_grants is None:
-            print("Provera nije uspela (moguć problem sa pristupom).")
-            continue
-
-        if ms_grants:
-            create_access_audit_allert(name, email, "M365", "High")
+        # MICROSOFT PROVERA - SAMO BROJIMO TOKENE
+        print("\n📧 MICROSOFT 365:")
+        ms_tokens = check_microsoft_oauth_grants(email, ms_token)
+        
+        if ms_tokens is None:
+            print("  ✗ Provera nije uspela (moguć problem sa pristupom).")
         else:
-            print(f"Nema aktivnih Microsoft tokena.")
-    
-    # Google part
-    google_service = get_google_service(GOOGLE_ADMIN_EMAIL)
-    if not google_service:
-        print("Ne mogu da nastavim bez Google servisa.")
-        # Decide if you want to exit or just skip Google checks
-        # exit()  # uncomment if Google check is mandatory
-
-    for person in leavers:
-        print(f"{person['employee_name']} ({person['company_email']}) - Status: {person['status']}")
-        email = person.get("company_email")
-        name = person.get("employee_name")
-
-        if not email:
-            continue
-    
-        if google_service:
-            google_tokens = check_google_oauth_tokens(email, google_service)
-            if google_tokens is None:
-                print("Provera Google nije uspela.")
-            elif google_tokens:
-                create_access_audit_allert(name, email, "Google Workspace", "High")
+            ms_count = len(ms_tokens) if ms_tokens else 0
+            if ms_count > 0:
+                print(f"  ⚠ Pronađeno {ms_count} aktivnih Microsoft tokena!")
+                # Pripremi detalje za Microsoft (ako želiš)
+                ms_details = []
+                for grant in ms_tokens:
+                    ms_details.append({
+                        'application': f"Client: {grant.get('clientId', 'Unknown')[:8]}...",
+                        'timestamp': datetime.now().isoformat()  # MS nema timestamp u odgovoru
+                    })
+                
+                # KREIRAJ JEDAN ALERT ZA SVE MICROSOFT TOKENE
+                create_consolidated_alert(
+                    employee_name=name,
+                    email=email,
+                    saas_app="M365",
+                    token_count=ms_count,
+                    token_details=ms_details,
+                    risk="High"
+                )
             else:
-                print(f"Nema aktivnih Google tokena.")
+                print(f"  ✓ Nema aktivnih Microsoft tokena.")
+
+        # GOOGLE PROVERA - SAMO BROJIMO TOKENE
+        if email.endswith('@thesmekeri.biz'):
+            print("\n🔵 GOOGLE WORKSPACE:")
+            google_tokens = get_active_tokens_for_user(email)
+            
+            if google_tokens is None:
+                print(f"  ✗ Došlo je do greške pri komunikaciji sa Google API-jem.")
+            elif not google_tokens:
+                print(f"  ✓ Nema aktivnih Google OAuth tokena.")
+            else:
+                google_count = len(google_tokens)
+                print(f"  ⚠ Pronađeno {google_count} aktivnih Google tokena!")
+                
+                # Ispiši prvih 5 aplikacija (samo informativno)
+                unique_apps = list(set([t['application'] for t in google_tokens]))
+                print(f"     Aplikacije: {', '.join(unique_apps[:5])}" + 
+                      (f" i još {len(unique_apps)-5}" if len(unique_apps) > 5 else ""))
+                
+                # KREIRAJ JEDAN ALERT ZA SVE GOOGLE TOKENE
+                create_consolidated_alert(
+                    employee_name=name,
+                    email=email,
+                    saas_app="Google Workspace",
+                    token_count=google_count,
+                    token_details=google_tokens,
+                    risk="High"
+                )
+    
+    print("\n=== KRAJ SKENIRANJA ===\n")
+    
+    # Pokreni test na kraju
+    test_google_api_access()
 
 if __name__ == "__main__":
     main()
