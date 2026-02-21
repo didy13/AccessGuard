@@ -35,14 +35,61 @@
 ## Microsoft Azure
 
     U projektu koristimo Microsoft Graph API za:
+    
         1. Čitanje OAuth2PermissionGrant aktivnih tokena za korisnike
         2. Brisanje tih grantova kada je potrebno opozvati pristup
-        3. Uzimanje ID‑a korisnika na osnovu email adrese.
+        3. Opozivanje svih sesija za korisnika
+        4. Uzimanje ID‑a korisnika na osnovu email adrese.
 
-    Komponente u Azure
-        1. Applikacija koju smo napravili preko App registration, nazvali smo ga M365
-        2. App M365 dodati API permissions: 'User.Read.All' (app permission), 'DelegatedPermissionGrant.ReadWrite.All' (app permission)
-        3. App M365 dodati API permissions: 'offline_access' (Delegated), Mail.Read (Delegated), User.Read (Delegated)
+    ### Komponente u Azure
+    
+        1. Applikacija koju smo napravili preko App registration, nazvali smo je M365
+        2. API Permissions dodate aplikaciji:
+            1. Application permissions
+                - `User.Read.All`
+                - `DelegatedPermissionGrant.ReadWrite.All`
+                - `User.Read`
+            2. Delegated permissions
+                - `offline_access`
+                - `Mail.Read`
+                - `User.Read`
+        3. Client credentials:
+            - Kreiran Client Secret (vrednost sačuvana u `.env` fajlu)
+            - Zabeležen Client ID (Application ID)
+            - Zabeležen Tenant ID (Directory ID)
+
+    ### Azure API endpointi koje koristimo:
+
+         1. Dobijanje access tokena: POST https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token
+         2. Čitanje OAuth grantova za korisnika: GET https://graph.microsoft.com/v1.0/users/{email}/oauth2PermissionGrants
+         3. Brisanje OAuth granta: DELETE https://graph.microsoft.com/v1.0/oauth2PermissionGrants/{grant_id}
+         4. Opozivanje svih sesija korisnika: POST https://graph.microsoft.com/v1.0/users/{email}/revokeSignInSessions
+
+## Google Workspace
+
+    U projektu koristimo Google Admin SDK API za:
+    
+        1. Čitanje aktivnih OAuth tokena za korisnike (`tokens().list()`)
+        2. Brisanje tih tokena kada je potrebno opozvati pristup (`tokens().delete()`)
+
+    ### Komponente u Google Cloud Console-u:
+    
+        1. Projekat u Google Cloud Console-u (npr. `saas-monitor`)
+        2. Service account sa domain-wide delegation (DWD) podešavanjem
+        3. API scopes (OAuth 2.0 opsezi) koje smo dodali u Google Admin konzoli
+
+    ### Potrebni API-ji i scope-ovi:
+
+        - Admin SDK API – obavezan za Directory API (tokens.list, tokens.delete)
+        - Reports API – opciono, ali koristi se u funkciji `get_active_tokens_for_user()` za audit logove
+        - `https://www.googleapis.com/auth/admin.directory.user.readonly` – čitanje osnovnih podataka o korisnicima
+        - `https://www.googleapis.com/auth/admin.directory.user.security` – ključan za pristup tokenima (list i delete)
+
+    ### Google API endpointi koje koristimo:
+
+        1. Listanje tokena za korisnika: GET https://admin.googleapis.com/admin/directory/v1/users/{userKey}/tokens
+        2. Brisanje tokena za korisnika i klijenta: DELETE https://admin.googleapis.com/admin/directory/v1/users/{userKey}/tokens/{clientId}
+        3. Čitanje audit logova tokena: GET https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/token
 
 ## Scripte
 
@@ -50,18 +97,21 @@
 
     U folderu the_smekeri_oauth/ kreirati .env sa sledećim sadržajem:
 
-        # Frappe
-        BASE_URL=http://development.localhost:8000   # ili ngrok URL
-        API_KEY=vaš_api_kez
-        API_SECRET=vaš_secret_api
-
-        # Microsoft Azure
-        MICROSOFT_TENANT_ID=vaš_microsoft_tenant_id
-        MICROSOFT_CLIENT_ID=vaš_microsoft_client_id
-        MICROSOFT_CLIENT_SECRET=vaš_microsoft_client_secret
-        MICROSOFT_CLIENT_APP_ID=vaš_microsoft_client_app_id
-        MICROSOFT_TENANT_APP_ID=vaš_microsoft_tenant_app_id
-        MICROSOFT_SECRET_APP=vaš_microsoft_app_secret_value
+        BASE_URL=http://development.localhost:8000/ ili link koji host prosledi
+        API_KEY=
+        API_SECRET=
+        
+        MICROSOFT_TENANT_ID=
+        MICROSOFT_CLIENT_ID=
+        MICROSOFT_CLIENT_SECRET=
+        MICROSOFT_CLIENT_APP_ID=
+        MICROSOFT_TENANT_APP_ID=
+        MICROSOFT_SECRET_APP=
+        
+        SERVICE_ACCOUNT_FILE='google.json'
+        ADMIN_EMAIL=
+        GOOGLE_CLIENT_OAUTH2_ID=
+        GOOGLE_CLIENT_OAUTH2_SECRET=
 
 ### Pokretanje python scripti iz foldera the_smekeri_oauth
 
