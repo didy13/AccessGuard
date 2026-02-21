@@ -11,9 +11,9 @@
 
 ### Kako pokrenuti docker (host)
     
-    1. **Startovanje kontejnera**:
+    1. Startovanje kontejnera:
         Otvorite folder u VS Code-u i kada se pojavi prompt, kliknite na "Reopen in Container"
-    2. **Pokretanje aplikacije**:
+    2. Pokretanje aplikacije:
         Unutar terminala:
             cd frappe-bench
             bench start
@@ -25,9 +25,9 @@
 
     Jedan lapotop ce da bude host koji pokrece docker, dok ce ostali biti klijenti koji se povezuju
 
-    - **Host**:
+    - Host:
         Startuje frappe_docker i pokrece ngrok
-    - **Klijenti**:
+    - Klijenti:
         U python scripti:
             BASE_RUL: "link koji host prosledjuje"
             Za pristupu bazi host prosledjuje API Key i Secret koji se generisu unutar dockera
@@ -143,7 +143,7 @@
 
 ### Kako funkcioniše saas_monitor_automatic_revoke.py
     
-    Ovaj skript radi slično kao `saas_monitor.py`, ali **automatski opoziva** pronađene tokene i sesije:
+    Ovaj skript radi slično kao `saas_monitor.py`, ali automatski opoziva pronađene tokene i sesije:
 
     Svaki put kad se pokrene:
         1. Povezuje se na Frappe i uzima zaposlene sa statusom Left u poslednjih 30 dana
@@ -153,15 +153,15 @@
             - Ako pronađe grantove:
                 * Opoziva sve sesije (`/revokeSignInSessions`)
                 * Briše sve OAuth grantove (`/oauth2PermissionGrants/{id}`)
-                * Kreira Access Audit Alert u Frappe-u sa statusom **Closed** ako su obe operacije uspele
-                * Ako neka operacija nije uspela, alert dobija status **Open**
+                * Kreira Access Audit Alert u Frappe-u sa statusom Closed ako su obe operacije uspele
+                * Ako neka operacija nije uspela, alert dobija status Open
         4. Za zaposlene sa domenom `@thesmekeri.biz` dodatno proverava:
             - Google Workspace tokene koristeći Google Admin SDK Directory API
             - Poziva `tokens().list()` za svakog korisnika
             - Ako pronađe tokene:
                 * Briše svaki token pojedinačno (`tokens().delete()`)
-                * Kreira Access Audit Alert sa statusom **Closed** ako je brisanje uspelo
-                * Ako brisanje nije uspelo, alert dobija status **Open**
+                * Kreira Access Audit Alert sa statusom Closed ako je brisanje uspelo
+                * Ako brisanje nije uspelo, alert dobija status Open
         5. Za svaki pronađeni token (Microsoft ili Google) kreira se jedinstveni alert koji sadrži:
             - Ime zaposlenog
             - Email adresu
