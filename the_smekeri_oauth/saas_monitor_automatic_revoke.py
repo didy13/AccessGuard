@@ -92,7 +92,7 @@ def check_microsoft_oauth_grants(user_email, access_token):
         print(f"Izuzetak pri proveri Microsoft tokena za {user_email}: {e}")
         return None
 
-def create_consolidated_alert(employee_name, email, saas_app, token_count, token_details=None, risk="High"):
+def create_consolidated_alert(employee_name, email, saas_app, token_count, status, risk, token_details=None):
     url = f"{BASE_URL}/api/resource/Access Audit Alert"
     
     description = ""
@@ -120,6 +120,7 @@ def create_consolidated_alert(employee_name, email, saas_app, token_count, token
         "employee_name": employee_name,
         "email": email,
         "saas_app": f"{saas_app} ({token_count} tokena)",
+        "status": status,
         "risk": risk,
         "detection_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "description": description
@@ -321,6 +322,18 @@ def revoke_google_tokens(user_email):
         print(f"Izuzetak pri brisanju Google tokena za {user_email}: {e}")
         return False
 
+def get_risk_by_designation(designation):
+    if not designation:
+        return "Medium"
+    if designation.lower() in ['accountant', 'administrative assistant']:
+        return "Medium"
+    elif designation.lower() in ['business analyst', 'chief executive officer', 'finance manager']:
+        return "High"
+    elif designation.lower() in ['secretary', 'consultant']:
+        return "Low"
+    else:
+        return "Medium"
+
 def main():
     leavers = get_employees_who_left(days_back=30)
     if not leavers:
@@ -347,18 +360,25 @@ def main():
         else:
             ms_count = len(ms_tokens) if ms_tokens else 0
             if ms_count > 0:
+                w = 0
                 print(f"Pronađeno {ms_count} aktivnih Microsoft tokena!")
                 if revoke_microsoft_sessions(email, ms_token):
                     print("Uspešno opozvane sesije.")
+                    w = w + 1
                 if delete_microsoft_oauth_grants(email, ms_token):
+                    w = w + 1
                     print("Uspešno obrisani OAuth grantovi.")
                 ms_details = [{'application': f"Client: {g.get('clientId', 'Unknown')[:8]}...", 'timestamp': datetime.now().isoformat()} for g in ms_tokens]
-                create_consolidated_alert(name, email, "M365", ms_count, ms_details, "High")
+                if w == 2:
+                    create_consolidated_alert(name, email, "M365", ms_count, "Closed", get_risk_by_designation(person.get("designation")), ms_details)
+                else:
+                    create_consolidated_alert(name, email, "M365", ms_count, "Open", get_risk_by_designation(person.get("designation")), ms_details)
             else:
                 print("Nema aktivnih Microsoft tokena.")
         
         # Google provera
         if email.endswith('@thesmekeri.biz'):
+            w = 0
             google_tokens = list_google_tokens(email) 
             if google_tokens is None:
                 print("Google provera nije uspela.")
@@ -369,6 +389,7 @@ def main():
                 print(f" Pronađeno {google_count} aktivnih Google tokena!")
                 if revoke_google_tokens(email):
                     print("Uspešno obrisani svi Google tokeni.")
+                    w = w + 1
                 google_details = []
                 for token in google_tokens:
                     app = token.get('displayText', 'Unknown App')
@@ -379,7 +400,10 @@ def main():
                         'application': app,
                         'timestamp': datetime.now().isoformat()
                     })
-                create_consolidated_alert(name, email, "Google Workspace", google_count, google_details, "High")
+                if w == 1:
+                    create_consolidated_alert(name, email, "Google Workspace", google_count, "Closed", get_risk_by_designation(person.get("designation")), google_details)
+                else:
+                    create_consolidated_alert(name, email, "Google Workspace", google_count, "Open", get_risk_by_designation(person.get("designation")), google_details)
 
 schedule.every(15).minutes.do(main)
 
