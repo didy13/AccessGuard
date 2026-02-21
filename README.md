@@ -25,9 +25,9 @@
 
     Jedan lapotop ce da bude host koji pokrece docker, dok ce ostali biti klijenti koji se povezuju
 
-    1. **Host**:
+    - **Host**:
         Startuje frappe_docker i pokrece ngrok
-    2. **Klijenti**:
+    - **Klijenti**:
         U python scripti:
             BASE_RUL: "link koji host prosledjuje"
             Za pristupu bazi host prosledjuje API Key i Secret koji se generisu unutar dockera
@@ -45,14 +45,14 @@
     
         1. Applikacija koju smo napravili preko App registration, nazvali smo je M365
         2. API Permissions dodate aplikaciji:
-            1. Application permissions
-                - `User.Read.All`
-                - `DelegatedPermissionGrant.ReadWrite.All`
-                - `User.Read`
-            2. Delegated permissions
-                - `offline_access`
-                - `Mail.Read`
-                - `User.Read`
+            - Application permissions
+                * `User.Read.All`
+                * `DelegatedPermissionGrant.ReadWrite.All`
+                * `User.Read`
+            - Delegated permissions
+                * `offline_access`
+                * `Mail.Read`
+                * `User.Read`
         3. Client credentials:
             - Kreiran Client Secret (vrednost sačuvana u `.env` fajlu)
             - Zabeležen Client ID (Application ID)
@@ -151,7 +151,7 @@
         3. Za svakog zaposlenog:
             - Poziva Microsoft Graph API `/users/{email}/oauth2PermissionGrants` da proveri aktivne OAuth tokene
             - Ako pronađe grantove:
-            * Opoziva sve sesije (`/revokeSignInSessions`)
+                * Opoziva sve sesije (`/revokeSignInSessions`)
                 * Briše sve OAuth grantove (`/oauth2PermissionGrants/{id}`)
                 * Kreira Access Audit Alert u Frappe-u sa statusom **Closed** ako su obe operacije uspele
                 * Ako neka operacija nije uspela, alert dobija status **Open**
