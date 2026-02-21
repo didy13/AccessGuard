@@ -73,16 +73,53 @@
 
     Svaki put kad se pokrene:
         1. Povezuje se na Frappe i uzima zaposlene sa statusom Left u poslednjih 30 dana
-        2. Dobija access tokene za Microsoft Graph
-        3. Za svakog zaposlenog poziva GET oauth2PermissionGrants
-        4. Ako pronađe grent pravi Access Audit Alert u Frappe-u za tog korisnika
+        2. Dobija access tokene za Microsoft Graph (OAuth 2.0 client credentials flow)
+        3. Za svakog zaposlenog:
+            - Poziva Microsoft Graph API `/users/{email}/oauth2PermissionGrants` da proveri aktivne OAuth tokene
+            - Ako pronađe grantove, kreira Access Audit Alert u Frappe-u za tog korisnika
+        4. Za zaposlene sa domenom `@thesmekeri.biz` dodatno proverava:
+            - Google Workspace tokene koristeći Google Admin SDK Directory API
+            - Koristi service account sa domain-wide delegacijom za pristup Google tokenima
+            - Poziva `tokens().list()` za svakog korisnika da dobije listu aktivnih OAuth tokena
+            - Ako pronađe Google tokene, kreira Access Audit Alert sa detaljima (naziv aplikacije, client ID)
+        5. Za svaki pronađeni token (Microsoft ili Google) kreira se jedinstveni alert koji sadrži:
+            - Ime zaposlenog
+            - Email adresu
+            - SaaS aplikaciju (M365 ili Google Workspace) sa brojem tokena
+            - Status (Open)
+            - Rizik (Low/Medium/High na osnovu radnog mesta)
+            - Detaljan opis sa listom aplikacija i brojem tokena po aplikaciji
+        6. Automatski se pokreće na svakih 15 minuta (pomoću `schedule` biblioteke)
 
-### Kako funkcioniše revoke_users_token.py
+### Kako funkcioniše saas_monitor_automatic_revoke.py
+    
+    Ovaj skript radi slično kao `saas_monitor.py`, ali **automatski opoziva** pronađene tokene i sesije:
 
-    Služi za ručno brisanje grantova određenog korisnika
-        1. Skripta će tražiti unos email-a korisnika
-        2. Prikazaće pronađene grentove
-        3. Na kraju će imati ispis koliko je gratova izbrisala a koliko je neuspešnih pokušaja imala
+    Svaki put kad se pokrene:
+        1. Povezuje se na Frappe i uzima zaposlene sa statusom Left u poslednjih 30 dana
+        2. Dobija access tokene za Microsoft Graph (OAuth 2.0 client credentials flow)
+        3. Za svakog zaposlenog:
+            - Poziva Microsoft Graph API `/users/{email}/oauth2PermissionGrants` da proveri aktivne OAuth tokene
+            - Ako pronađe grantove:
+            * Opoziva sve sesije (`/revokeSignInSessions`)
+                * Briše sve OAuth grantove (`/oauth2PermissionGrants/{id}`)
+                * Kreira Access Audit Alert u Frappe-u sa statusom **Closed** ako su obe operacije uspele
+                * Ako neka operacija nije uspela, alert dobija status **Open**
+        4. Za zaposlene sa domenom `@thesmekeri.biz` dodatno proverava:
+            - Google Workspace tokene koristeći Google Admin SDK Directory API
+            - Poziva `tokens().list()` za svakog korisnika
+            - Ako pronađe tokene:
+                * Briše svaki token pojedinačno (`tokens().delete()`)
+                * Kreira Access Audit Alert sa statusom **Closed** ako je brisanje uspelo
+                * Ako brisanje nije uspelo, alert dobija status **Open**
+        5. Za svaki pronađeni token (Microsoft ili Google) kreira se jedinstveni alert koji sadrži:
+            - Ime zaposlenog
+            - Email adresu
+            - SaaS aplikaciju (M365 ili Google Workspace) sa brojem tokena
+            - Status (Closed ako su svi tokeni uspešno obrisani, inače Open)
+            - Rizik (Low/Medium/High na osnovu radnog mesta)
+            - Detaljan opis sa listom aplikacija i brojem tokena po aplikaciji
+        6. Automatski se pokreće na svakih 15 minuta (pomoću `schedule` biblioteke)
 
 ### Kako staviti tokene preko powershell
 
