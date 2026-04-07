@@ -1,5 +1,17 @@
-requests
-python-dotenv
-google-api-python-client
-google-auth
-schedule
+# ── Server ────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+sqlalchemy>=2.0.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+cryptography>=42.0.0
+
+# ── Providers ─────────────────────────────────────────────────
+requests>=2.31.0
+google-api-python-client>=2.125.0
+google-auth>=2.29.0
+
+# ── Agent ─────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+PyYAML>=6.0.1
+schedule>=1.2.1

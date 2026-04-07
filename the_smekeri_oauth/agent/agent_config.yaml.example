@@ -1,0 +1,39 @@
+# Agent configuration example — copy to agent_config.yaml and fill in values.
+
+company_id: "acme-corp"
+company_name: "Acme Corp"
+
+# URL of YOUR server that receives events
+server_url: "https://your-server.example.com"
+server_api_key: "change-me-strong-secret"
+
+# Polling interval in seconds (default 900 = 15 minutes)
+poll_interval: 900
+
+# Email domain used to distinguish Google Workspace users
+google_domain: "@acme.com"
+
+# Maps job titles to SaaS providers.
+# Employees with roles NOT listed here get default_providers.
+role_provider_map:
+  "CEO":                    ["microsoft", "google"]
+  "Finance Manager":        ["microsoft", "google"]
+  "Software Engineer":      ["microsoft", "google"]
+  "Business Analyst":       ["microsoft", "google"]
+  "Accountant":             ["microsoft"]
+  "Administrative Assistant": ["microsoft"]
+  "Secretary":              ["microsoft"]
+  "Consultant":             ["microsoft"]
+
+# Fallback when a role is not in role_provider_map
+default_providers: ["microsoft"]
+
+# Path to persist state between runs
+state_file: ".agent_state.json"
+
+connector:
+  type: "frappe"
+  # Override with env vars FRAPPE_BASE_URL, FRAPPE_API_KEY, FRAPPE_API_SECRET
+  base_url: "https://erpnext.acme.com"
+  api_key: ""
+  api_secret: ""

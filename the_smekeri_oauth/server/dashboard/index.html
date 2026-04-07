@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AccessGuard</title>
+<style>
+  :root {
+    --bg:#0f1117;--surface:#1a1d27;--surface2:#242736;--border:#2e3347;
+    --accent:#6366f1;--accent-light:#818cf8;--success:#22c55e;--danger:#ef4444;
+    --warn:#f59e0b;--text:#e2e8f0;--muted:#64748b;--radius:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;background:var(--surface);border-right:1px solid var(--border);padding:24px 0;display:flex;flex-direction:column;z-index:10}
+  .logo{padding:0 20px 24px;font-size:16px;font-weight:700;color:var(--accent-light)}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:var(--muted);transition:all .15s}
+  .nav-item:hover,.nav-item.active{background:var(--surface2);color:var(--text)}
+  .main{margin-left:220px;padding:32px;min-height:100vh}
+  .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+  .page-title{font-size:22px;font-weight:700}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+  .stat-label{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .stat-value{font-size:32px;font-weight:700}
+  .stat-value.ok{color:var(--success)}.stat-value.err{color:var(--danger)}.stat-value.acc{color:var(--accent-light)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  .card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .card-title{font-weight:600;font-size:15px}
+  .card-body{padding:20px}
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:var(--surface2)}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-ok{background:#14532d33;color:var(--success)}.b-err{background:#7f1d1d33;color:var(--danger)}
+  .b-warn{background:#78350f33;color:var(--warn)}.b-info{background:#1e1b4b33;color:var(--accent-light)}
+  .b-muted{background:var(--surface2);color:var(--muted)}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .form-group{margin-bottom:16px}
+  label{display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase}
+  input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  textarea{resize:vertical;min-height:120px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
+  .btn:hover{opacity:.85}.btn-p{background:var(--accent);color:#fff}.btn-d{background:var(--danger);color:#fff}
+  .btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+  .btn-sm{padding:5px 10px;font-size:12px}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:flex-start;padding-top:80px}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-width:95vw}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .modal-title{font-weight:700;font-size:15px}
+  .modal-close{cursor:pointer;color:var(--muted);background:none;border:none;font-size:20px;color:inherit}
+  .modal-body{padding:20px}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+  .page{display:none}.page.active{display:block}
+  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border)}
+  .tab{padding:8px 16px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.active{color:var(--accent-light);border-color:var(--accent-light)}
+  .empty{text-align:center;color:var(--muted);padding:48px 20px}
+  .tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px;font-family:monospace}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;font-size:13px;font-weight:600;z-index:200;transition:opacity .3s;min-width:240px}
+  .toast.ok{border-color:var(--success);color:var(--success)}.toast.err{border-color:var(--danger);color:var(--danger)}
+  select{cursor:pointer}
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="logo">🛡 AccessGuard</div>
+  <div class="nav-item active" data-page="dashboard" onclick="showPage(this)">📊 Dashboard</div>
+  <div class="nav-item" data-page="logs" onclick="showPage(this)">📄 Audit Logs</div>
+  <div class="nav-item" data-page="companies" onclick="showPage(this)">🏢 Companies</div>
+</nav>
+
+<main class="main">
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="page-header">
+      <div class="page-title">Overview</div>
+      <select id="dash-filter" onchange="loadDashboard()"><option value="">All Companies</option></select>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total Events</div><div class="stat-value acc" id="s-total">—</div></div>
+      <div class="stat-card"><div class="stat-label">Succeeded</div><div class="stat-value ok" id="s-ok">—</div></div>
+      <div class="stat-card"><div class="stat-label">Failed</div><div class="stat-value err" id="s-fail">—</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent Activity</span>
+        <button class="btn btn-g btn-sm" onclick="loadDashboard()">↺ Refresh</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Time</th><th>Company</th><th>Employee</th><th>Action</th><th>Provider</th><th>Op</th><th>Status</th></tr></thead>
+        <tbody id="dash-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div id="page-logs" class="page">
+    <div class="page-header">
+      <div class="page-title">Audit Logs</div>
+      <select id="logs-filter" onchange="loadLogs()"><option value="">All Companies</option></select>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Log Entries</span>
+        <button class="btn btn-g btn-sm" onclick="loadLogs()">↺ Refresh</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Time</th><th>Company</th><th>Employee</th><th>Action</th><th>Provider</th><th>Op</th><th>Status</th><th>Message</th></tr></thead>
+        <tbody id="logs-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- COMPANIES -->
+  <div id="page-companies" class="page">
+    <div class="page-header">
+      <div class="page-title">Companies</div>
+      <button class="btn btn-p" onclick="openModal('modal-company')">+ Add Company</button>
+    </div>
+    <div id="company-list"></div>
+    <div id="company-detail" style="display:none;margin-top:24px">
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('tab-providers',this)">Providers</div>
+        <div class="tab" onclick="showTab('tab-roles',this)">Role Mappings</div>
+      </div>
+      <div id="tab-providers">
+        <div class="page-header" style="margin-bottom:16px">
+          <strong id="lbl-providers">Providers</strong>
+          <button class="btn btn-p btn-sm" onclick="openModal('modal-provider')">+ Configure Provider</button>
+        </div>
+        <div id="provider-list"></div>
+      </div>
+      <div id="tab-roles" style="display:none">
+        <div class="page-header" style="margin-bottom:16px">
+          <strong id="lbl-roles">Role Mappings</strong>
+          <button class="btn btn-p btn-sm" onclick="openModal('modal-role')">+ Add Role</button>
+        </div>
+        <div id="role-list"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODALS -->
+<div id="modal-company" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Company</span><button class="modal-close" onclick="closeModal('modal-company')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Company ID</label><input id="f-cid" placeholder="acme-corp" /></div>
+      <div class="form-group"><label>Company Name</label><input id="f-cname" placeholder="Acme Corp" /></div>
+      <div class="form-group"><label>Agent API Key (min 16 chars)</label><input id="f-ckey" placeholder="Strong secret…" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-company')">Cancel</button>
+      <button class="btn btn-p" onclick="submitCompany()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-provider" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Configure Provider</span><button class="modal-close" onclick="closeModal('modal-provider')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Provider</label>
+        <select id="f-pname"><option value="microsoft">Microsoft 365</option><option value="google">Google Workspace</option></select>
+      </div>
+      <div class="form-group">
+        <label>Credentials (JSON)</label>
+        <textarea id="f-pcreds" placeholder='{"tenant_id":"…","client_id":"…","client_secret":"…"}'></textarea>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="f-penabled" checked style="width:auto" />
+        <label style="margin:0;text-transform:none;color:var(--text)">Enabled</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-provider')">Cancel</button>
+      <button class="btn btn-p" onclick="submitProvider()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-role" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Role Mapping</span><button class="modal-close" onclick="closeModal('modal-role')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Role / Designation</label><input id="f-rname" placeholder="CEO" /></div>
+      <div class="form-group"><label>Providers (comma-separated)</label><input id="f-rproviders" placeholder="microsoft, google" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-role')">Cancel</button>
+      <button class="btn btn-p" onclick="submitRole()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────
+const API = '';
+let ADMIN_KEY = localStorage.getItem('adminKey') || '';
+let selectedCompany = null;
+
+if (!ADMIN_KEY) {
+  ADMIN_KEY = prompt('Enter admin API key:') || '';
+  localStorage.setItem('adminKey', ADMIN_KEY);
+}
+
+// ── HTML escaping (prevent XSS when inserting text into DOM) ──
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
+}
+
+// ── Fetch helpers ─────────────────────────────────────────────
+function adminHeaders() {
+  return { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY };
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { headers: adminHeaders(), ...opts });
+  if (!res.ok) throw new Error(await res.text() || res.statusText);
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function publicApi(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = String(msg);          // textContent — no XSS
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// ── Formatters ────────────────────────────────────────────────
+function fmtDate(ts) { return new Date(ts).toLocaleString(); }
+
+function actionBadge(action) {
+  const cls  = { terminated: 'b-err', role_changed: 'b-warn', added: 'b-ok' };
+  const lbl  = { terminated: '✕ Terminated', role_changed: '↺ Role Changed', added: '+ Added' };
+  return `<span class="badge ${cls[action] || 'b-muted'}">${esc(lbl[action] || action)}</span>`;
+}
+
+function statusBadge(ok) {
+  return ok
+    ? '<span class="badge b-ok"><span class="dot"></span> Success</span>'
+    : '<span class="badge b-err"><span class="dot"></span> Failed</span>';
+}
+
+// ── Build table rows safely ───────────────────────────────────
+function logRow(l, withMessage) {
+  const tr = document.createElement('tr');
+
+  function td(content, muted, nowrap) {
+    const el = document.createElement('td');
+    if (muted) el.style.color = 'var(--muted)';
+    if (nowrap) el.style.whiteSpace = 'nowrap';
+    if (typeof content === 'string' && content.startsWith('<')) {
+      // pre-built safe HTML for badges only
+      el.innerHTML = content;
+    } else {
+      el.textContent = content;
+    }
+    return el;
+  }
+
+  // Time
+  const time = document.createElement('td');
+  time.style.cssText = 'white-space:nowrap;color:var(--muted);font-size:12px';
+  time.textContent = fmtDate(l.timestamp);
+  tr.appendChild(time);
+
+  // Company tag
+  const compTd = document.createElement('td');
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = l.company_id;
+  compTd.appendChild(tag);
+  tr.appendChild(compTd);
+
+  // Employee
+  const empTd = document.createElement('td');
+  const nameDiv = document.createElement('div');
+  nameDiv.textContent = l.employee_name;
+  const emailDiv = document.createElement('div');
+  emailDiv.style.cssText = 'color:var(--muted);font-size:11px';
+  emailDiv.textContent = l.employee_email;
+  empTd.appendChild(nameDiv);
+  empTd.appendChild(emailDiv);
+  tr.appendChild(empTd);
+
+  tr.appendChild(td(actionBadge(l.action_type)));
+  tr.appendChild(td(`<span class="badge b-info">${esc(l.provider)}</span>`));
+  tr.appendChild(td(`<span class="badge b-muted">${esc(l.action)}</span>`));
+  tr.appendChild(td(statusBadge(l.success)));
+
+  if (withMessage) {
+    const msgTd = document.createElement('td');
+    msgTd.style.cssText = 'max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px';
+    msgTd.textContent = l.message;
+    tr.appendChild(msgTd);
+  }
+
+  return tr;
+}
+
+function emptyRow(cols, msg) {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = cols;
+  td.className = 'empty';
+  td.textContent = msg;
+  tr.appendChild(td);
+  return tr;
+}
+
+// ── Navigation ────────────────────────────────────────────────
+function showPage(el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = el.dataset.page;
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'logs') loadLogs();
+  if (page === 'companies') loadCompanies();
+}
+
+function showTab(tabId, el) {
+  document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['tab-providers', 'tab-roles'].forEach(id => {
+    document.getElementById(id).style.display = id === tabId ? '' : 'none';
+  });
+  if (tabId === 'tab-providers') loadProviders();
+  if (tabId === 'tab-roles') loadRoles();
+}
+
+// ── Populate company selects ──────────────────────────────────
+function populateSelects(companies) {
+  ['dash-filter', 'logs-filter'].forEach(id => {
+    const sel = document.getElementById(id);
+    const val = sel.value;
+    // Remove all options except the first ("All Companies")
+    while (sel.options.length > 1) sel.remove(1);
+    companies.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.company_id;
+      opt.textContent = c.company_name;
+      sel.appendChild(opt);
+    });
+    sel.value = val;
+  });
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+async function loadDashboard() {
+  const company = document.getElementById('dash-filter').value;
+  const qs = company ? `?company_id=${encodeURIComponent(company)}` : '';
+  const logQs = company ? `?limit=20&company_id=${encodeURIComponent(company)}` : '?limit=20';
+
+  try {
+    const [stats, logs] = await Promise.all([
+      publicApi('/api/v1/logs/stats' + qs),
+      publicApi('/api/v1/logs' + logQs),
+    ]);
+    document.getElementById('s-total').textContent = stats.total;
+    document.getElementById('s-ok').textContent = stats.succeeded;
+    document.getElementById('s-fail').textContent = stats.failed;
+
+    const tbody = document.getElementById('dash-tbody');
+    tbody.replaceChildren();
+    if (!logs.length) { tbody.appendChild(emptyRow(7, 'No events yet')); return; }
+    logs.forEach(l => tbody.appendChild(logRow(l, false)));
+  } catch (e) { toast('Dashboard error: ' + e.message, 'err'); }
+}
+
+// ── Logs ──────────────────────────────────────────────────────
+async function loadLogs() {
+  const company = document.getElementById('logs-filter').value;
+  const qs = company
+    ? `?limit=200&company_id=${encodeURIComponent(company)}`
+    : '?limit=200';
+  try {
+    const logs = await publicApi('/api/v1/logs' + qs);
+    const tbody = document.getElementById('logs-tbody');
+    tbody.replaceChildren();
+    if (!logs.length) { tbody.appendChild(emptyRow(8, 'No logs found')); return; }
+    logs.forEach(l => tbody.appendChild(logRow(l, true)));
+  } catch (e) { toast('Logs error: ' + e.message, 'err'); }
+}
+
+// ── Companies ─────────────────────────────────────────────────
+async function loadCompanies() {
+  try {
+    const companies = await api('/api/v1/admin/companies');
+    populateSelects(companies);
+    const container = document.getElementById('company-list');
+    container.replaceChildren();
+
+    if (!companies.length) {
+      const p = document.createElement('div');
+      p.className = 'empty';
+      p.textContent = 'No companies yet. Click "+ Add Company" to get started.';
+      container.appendChild(p);
+      return;
+    }
+
+    companies.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.marginBottom = '12px';
+
+      const header = document.createElement('div');
+      header.className = 'card-header';
+      header.style.cursor = 'pointer';
+
+      const info = document.createElement('div');
+      const nameEl = document.createElement('div');
+      nameEl.style.fontWeight = '700';
+      nameEl.textContent = c.company_name;
+      const idEl = document.createElement('div');
+      idEl.style.cssText = 'color:var(--muted);font-size:12px;margin-top:2px';
+      const tagEl = document.createElement('span');
+      tagEl.className = 'tag';
+      tagEl.textContent = c.company_id;
+      idEl.appendChild(tagEl);
+      info.appendChild(nameEl);
+      info.appendChild(idEl);
+
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;align-items:center;gap:8px';
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (c.enabled ? 'b-ok' : 'b-muted');
+      badge.textContent = c.enabled ? 'Active' : 'Disabled';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-d btn-sm';
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = (e) => { e.stopPropagation(); deleteCompany(c.company_id, c.company_name); };
+      actions.appendChild(badge);
+      actions.appendChild(delBtn);
+
+      header.appendChild(info);
+      header.appendChild(actions);
+      header.onclick = () => selectCompany(c.company_id);
+
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      body.style.cssText = 'display:flex;gap:16px;color:var(--muted);font-size:12px';
+      const p1 = document.createElement('span');
+      p1.textContent = `${c.providers.length} provider(s) configured`;
+      const p2 = document.createElement('span');
+      p2.textContent = `Created: ${fmtDate(c.created_at)}`;
+      body.appendChild(p1);
+      body.appendChild(p2);
+
+      card.appendChild(header);
+      card.appendChild(body);
+      container.appendChild(card);
+    });
+  } catch (e) { toast('Companies error: ' + e.message, 'err'); }
+}
+
+async function selectCompany(id) {
+  selectedCompany = id;
+  document.getElementById('company-detail').style.display = '';
+  document.getElementById('lbl-providers').textContent = `Providers — ${id}`;
+  document.getElementById('lbl-roles').textContent = `Role Mappings — ${id}`;
+  document.getElementById('tab-providers').style.display = '';
+  document.getElementById('tab-roles').style.display = 'none';
+  document.querySelectorAll('.tab')[0].classList.add('active');
+  document.querySelectorAll('.tab')[1].classList.remove('active');
+  loadProviders();
+}
+
+async function deleteCompany(id, name) {
+  if (!confirm(`Delete company "${name}" (${id})?\nThis will permanently delete all associated data.`)) return;
+  try {
+    await api(`/api/v1/admin/companies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    toast('Company deleted');
+    document.getElementById('company-detail').style.display = 'none';
+    selectedCompany = null;
+    loadCompanies();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Providers ─────────────────────────────────────────────────
+async function loadProviders() {
+  if (!selectedCompany) return;
+  try {
+    const providers = await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers`);
+    const container = document.getElementById('provider-list');
+    container.replaceChildren();
+
+    if (!providers.length) {
+      const el = document.createElement('div');
+      el.className = 'empty';
+      el.textContent = 'No providers configured';
+      container.appendChild(el);
+      return;
+    }
+
+    providers.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.marginBottom = '10px';
+
+      const hdr = document.createElement('div');
+      hdr.className = 'card-header';
+      const nameEl = document.createElement('div');
+      nameEl.style.fontWeight = '600';
+      nameEl.textContent = p.provider_name;
+      const right = document.createElement('div');
+      right.style.cssText = 'display:flex;gap:8px;align-items:center';
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (p.enabled ? 'b-ok' : 'b-muted');
+      badge.textContent = p.enabled ? 'Enabled' : 'Disabled';
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-d btn-sm';
+      btn.textContent = 'Remove';
+      btn.onclick = () => deleteProvider(p.provider_name);
+      right.appendChild(badge);
+      right.appendChild(btn);
+      hdr.appendChild(nameEl);
+      hdr.appendChild(right);
+
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      body.style.cssText = 'color:var(--muted);font-size:12px';
+      body.textContent = `Last updated: ${fmtDate(p.updated_at)}`;
+
+      card.appendChild(hdr);
+      card.appendChild(body);
+      container.appendChild(card);
+    });
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function deleteProvider(name) {
+  if (!confirm(`Remove provider "${name}"?`)) return;
+  try {
+    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    toast('Provider removed');
+    loadProviders();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Roles ─────────────────────────────────────────────────────
+async function loadRoles() {
+  if (!selectedCompany) return;
+  try {
+    const roles = await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles`);
+    const container = document.getElementById('role-list');
+    container.replaceChildren();
+
+    if (!roles.length) {
+      const el = document.createElement('div');
+      el.className = 'empty';
+      el.textContent = 'No role mappings configured';
+      container.appendChild(el);
+      return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    const table = document.createElement('table');
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Role / Designation', 'Providers', ''].forEach(t => {
+      const th = document.createElement('th');
+      th.textContent = t;
+      hrow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+
+    roles.forEach(r => {
+      const row = tbody.insertRow();
+      const nameTd = row.insertCell();
+      nameTd.innerHTML = `<strong>${esc(r.role_name)}</strong>`;
+      const provTd = row.insertCell();
+      provTd.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;padding:12px';
+      r.providers.forEach(p => {
+        const badge = document.createElement('span');
+        badge.className = 'badge b-info';
+        badge.textContent = p;
+        provTd.appendChild(badge);
+      });
+      const actTd = row.insertCell();
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-d btn-sm';
+      btn.textContent = 'Remove';
+      btn.onclick = () => deleteRole(r.role_name);
+      actTd.appendChild(btn);
+    });
+
+    card.appendChild(table);
+    container.appendChild(card);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function deleteRole(name) {
+  if (!confirm(`Remove role mapping for "${name}"?`)) return;
+  try {
+    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    toast('Role mapping removed');
+    loadRoles();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Modals ────────────────────────────────────────────────────
+function openModal(id) {
+  if (id !== 'modal-company' && !selectedCompany) { toast('Select a company first', 'err'); return; }
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+async function submitCompany() {
+  const id   = document.getElementById('f-cid').value.trim();
+  const name = document.getElementById('f-cname').value.trim();
+  const key  = document.getElementById('f-ckey').value.trim();
+  if (!id || !name || key.length < 16) { toast('Company ID, Name, and API Key (min 16 chars) are required', 'err'); return; }
+  try {
+    await api('/api/v1/admin/companies', {
+      method: 'POST',
+      body: JSON.stringify({ company_id: id, company_name: name, agent_api_key: key }),
+    });
+    toast('Company created');
+    closeModal('modal-company');
+    document.getElementById('f-cid').value = '';
+    document.getElementById('f-cname').value = '';
+    document.getElementById('f-ckey').value = '';
+    loadCompanies();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function submitProvider() {
+  const name    = document.getElementById('f-pname').value;
+  const raw     = document.getElementById('f-pcreds').value.trim();
+  const enabled = document.getElementById('f-penabled').checked;
+  let creds;
+  try { creds = JSON.parse(raw); } catch { toast('Credentials must be valid JSON', 'err'); return; }
+  try {
+    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ provider_name: name, credentials: creds, enabled }),
+    });
+    toast('Provider saved');
+    closeModal('modal-provider');
+    document.getElementById('f-pcreds').value = '';
+    loadProviders();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function submitRole() {
+  const name      = document.getElementById('f-rname').value.trim();
+  const providers = document.getElementById('f-rproviders').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (!name || !providers.length) { toast('Role name and at least one provider are required', 'err'); return; }
+  try {
+    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role_name: name, providers }),
+    });
+    toast('Role mapping saved');
+    closeModal('modal-role');
+    document.getElementById('f-rname').value = '';
+    document.getElementById('f-rproviders').value = '';
+    loadRoles();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// Initial load
+loadDashboard();
+loadCompanies();
+</script>
+</body>
+</html>
