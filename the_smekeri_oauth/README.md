@@ -120,6 +120,7 @@ AUTH_ENABLED=false          # skip auth for local testing
 ```bash
 pip install -r requirements.txt
 uvicorn server.main:app --reload
+password: change-me
 ```
 
 #### Step 4 — Run the automated test suite
