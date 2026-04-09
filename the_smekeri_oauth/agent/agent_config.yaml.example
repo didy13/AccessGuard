@@ -31,6 +31,10 @@ default_providers: ["microsoft"]
 # Path to persist state between runs
 state_file: ".agent_state.json"
 
+# Local dashboard UI (http://localhost:7979)
+dashboard_enabled: true
+dashboard_port: 7979
+
 connector:
   type: "frappe"
   # Override with env vars FRAPPE_BASE_URL, FRAPPE_API_KEY, FRAPPE_API_SECRET

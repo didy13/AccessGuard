@@ -44,6 +44,10 @@ class AgentConfig:
     # Path to the local state file
     state_file: str = ".agent_state.json"
 
+    # Local dashboard web UI
+    dashboard_enabled: bool = True
+    dashboard_port: int = 7979
+
 
 def load_config(config_path: str = "agent_config.yaml") -> AgentConfig:
     """Load config from YAML file, with env var overrides."""
@@ -62,6 +66,8 @@ def load_config(config_path: str = "agent_config.yaml") -> AgentConfig:
         cfg.role_provider_map = data.get("role_provider_map", cfg.role_provider_map)
         cfg.default_providers = data.get("default_providers", cfg.default_providers)
         cfg.state_file = data.get("state_file", cfg.state_file)
+        cfg.dashboard_enabled = bool(data.get("dashboard_enabled", cfg.dashboard_enabled))
+        cfg.dashboard_port = int(data.get("dashboard_port", cfg.dashboard_port))
 
         conn = data.get("connector", {})
         cfg.connector = ConnectorConfig(

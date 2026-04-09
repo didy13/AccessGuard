@@ -65,6 +65,8 @@ class MicrosoftProvider(BaseProvider):
                 headers=headers,
                 timeout=30,
             )
+            if resp.status_code == 404:
+                return ProviderResult("microsoft", "revoke", True, f"User {email} not found in Azure AD — account already removed")
             if resp.status_code != 200:
                 errors.append(f"revokeSignInSessions: {resp.status_code} {resp.text[:100]}")
         except requests.RequestException as exc:
@@ -77,6 +79,8 @@ class MicrosoftProvider(BaseProvider):
                 headers=headers,
                 timeout=30,
             )
+            if list_resp.status_code == 404:
+                return ProviderResult("microsoft", "revoke", True, f"User {email} not found in Azure AD — account already removed")
             if list_resp.status_code == 200:
                 for grant in list_resp.json().get("value", []):
                     grant_id = grant.get("id")

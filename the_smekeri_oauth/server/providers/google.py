@@ -63,6 +63,8 @@ class GoogleProvider(BaseProvider):
             )
 
         except HttpError as exc:
+            if exc.resp.status == 404:
+                return ProviderResult("google", "revoke", True, f"User {email} not found in Google Workspace — account already removed")
             msg = f"Google API error for {email}: {exc}"
             if exc.resp.status == 403:
                 msg += " — check domain-wide delegation scopes"

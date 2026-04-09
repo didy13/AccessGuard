@@ -14,7 +14,7 @@ import argparse
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from dotenv import load_dotenv
@@ -99,10 +99,11 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
 # HTTP sender
 # ---------------------------------------------------------------------------
 
-def send_payload(payload: dict, cfg: AgentConfig) -> bool:
+def send_payload(payload: dict, cfg: AgentConfig) -> tuple[bool, dict]:
+    """Send payload to server. Returns (success, parsed_response)."""
     if not cfg.server_url:
         logger.error("server_url is not configured — cannot send payload")
-        return False
+        return False, {}
 
     headers = {"Content-Type": "application/json"}
     if cfg.server_api_key:
@@ -115,23 +116,30 @@ def send_payload(payload: dict, cfg: AgentConfig) -> bool:
             headers=headers,
             timeout=30,
         )
+        body = {}
+        try:
+            body = resp.json()
+        except Exception:
+            pass
+
         if resp.status_code in (200, 201, 202):
             logger.info(
                 "Payload accepted for %s (%s)",
                 payload["employee_email"],
                 payload["action_type"],
             )
-            return True
+            return True, body
+
         logger.error(
             "Server rejected payload for %s: %d %s",
             payload["employee_email"],
             resp.status_code,
             resp.text[:200],
         )
-        return False
+        return False, body
     except requests.RequestException as exc:
         logger.error("Failed to send payload for %s: %s", payload["employee_email"], exc)
-        return False
+        return False, {}
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +147,10 @@ def send_payload(payload: dict, cfg: AgentConfig) -> bool:
 # ---------------------------------------------------------------------------
 
 def run_once(connector: BaseConnector, cfg: AgentConfig) -> None:
+    from .dashboard_state import state as dash_state
+
     logger.info("Polling %s connector…", cfg.connector.type)
+    scan = dash_state.start_scan()
 
     current_employees = connector.get_all_employees()
     if not current_employees:
@@ -155,12 +166,16 @@ def run_once(connector: BaseConnector, cfg: AgentConfig) -> None:
         logger.info("%d change(s) detected", len(changes))
         for change in changes:
             payload = build_payload(change, cfg)
-            send_payload(payload, cfg)
+            success, response = send_payload(payload, cfg)
+            dash_state.record_change(scan, change, payload, success, response)
 
     save_state(cfg.state_file, current_employees)
 
 
 def main(config_path: str = "agent_config.yaml") -> None:
+    from .dashboard_state import state as dash_state
+    from .dashboard import start_dashboard_thread
+
     cfg = load_config(config_path)
 
     if not cfg.company_id:
@@ -173,6 +188,12 @@ def main(config_path: str = "agent_config.yaml") -> None:
         logger.error("Connector health check failed — aborting")
         sys.exit(1)
 
+    dash_state.init(cfg)
+
+    if cfg.dashboard_enabled:
+        start_dashboard_thread(port=cfg.dashboard_port)
+        logger.info("Dashboard available at http://127.0.0.1:%d", cfg.dashboard_port)
+
     logger.info(
         "Agent started for company '%s' (poll interval: %ds)",
         cfg.company_name,
@@ -182,6 +203,8 @@ def main(config_path: str = "agent_config.yaml") -> None:
     # Run immediately on startup, then on interval
     run_once(connector, cfg)
     while True:
+        next_scan = datetime.utcnow() + timedelta(seconds=cfg.poll_interval)
+        dash_state.set_next_scan(next_scan)
         time.sleep(cfg.poll_interval)
         run_once(connector, cfg)
 
