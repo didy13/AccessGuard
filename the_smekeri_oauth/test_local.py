@@ -106,8 +106,10 @@ def make_payload(
     new_role: str | None = None,
     revoke: list[str] | None = None,
     grant: list[str] | None = None,
+    access_changes: list[dict] | None = None,
+    event_id: str | None = None,
 ) -> dict:
-    return {
+    body: dict = {
         "company_id": COMPANY_ID,
         "company_name": "Demo Corp",
         "employee_email": email,
@@ -116,10 +118,18 @@ def make_payload(
         "previous_role": prev_role,
         "new_role": new_role,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "saas_revoke": revoke or [],
-        "saas_grant": grant or [],
         "metadata": {"test": True},
     }
+    if event_id:
+        body["event_id"] = event_id
+    if access_changes is not None:
+        body["access_changes"] = access_changes
+        body["saas_revoke"] = []
+        body["saas_grant"] = []
+    else:
+        body["saas_revoke"] = revoke or []
+        body["saas_grant"] = grant or []
+    return body
 
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -224,6 +234,53 @@ def test_termination() -> None:
         ok(f"  {r['provider']} → {r['message']}")
 
 
+def test_access_changes_with_entitlements() -> None:
+    info("Scenario 5: access_changes with entitlements (mock providers)")
+    payload = make_payload(
+        action="added",
+        email="erin.entitlements@democorp.com",
+        name="Erin Entitlements",
+        new_role="QA Engineer",
+        access_changes=[
+            {
+                "provider": "mock_microsoft",
+                "action": "grant",
+                "entitlements": [{"type": "aad_group", "group_id": "demo-group"}],
+            },
+            {
+                "provider": "mock_google",
+                "action": "grant",
+                "entitlements": [{"type": "workspace_group", "email": "qa@democorp.com"}],
+            },
+        ],
+        event_id="00000000-0000-4000-8000-000000000099",
+    )
+    result = send_event(payload)
+    assert result["all_succeeded"]
+    for r in result["results"]:
+        d = r.get("details") or {}
+        assert d.get("entitlements"), f"Expected entitlements echo in details: {r}"
+
+
+def test_policy_skips_disabled_provider() -> None:
+    info("Scenario 6: provider not enabled for company is rejected (policy)")
+    payload = make_payload(
+        action="added",
+        email="frank.policy@democorp.com",
+        name="Frank Policy",
+        new_role="Contractor",
+        access_changes=[
+            {"provider": "mock_microsoft", "action": "grant", "entitlements": []},
+            {"provider": "google", "action": "grant", "entitlements": []},
+        ],
+    )
+    result = send_event(payload)
+    assert not result["all_succeeded"]
+    msgs = " ".join(r.get("message", "") for r in result["results"])
+    assert "not enabled" in msgs
+    assert any(r.get("success") for r in result["results"])
+
+
 def test_missing_provider_credentials() -> None:
     info("Scenario 4: Provider with no credentials configured (expected failure)")
     payload = make_payload(
@@ -245,7 +302,7 @@ def test_logs_and_stats() -> None:
     logs = get_logs(COMPANY_ID, limit=20)
     stats = get_stats(COMPANY_ID)
 
-    assert len(logs) >= 5, f"Expected at least 5 log entries, got {len(logs)}"
+    assert len(logs) >= 8, f"Expected at least 8 log entries, got {len(logs)}"
     ok(f"Log entries for {COMPANY_ID}: {len(logs)}")
     ok(f"Stats — total: {stats['total']}, succeeded: {stats['succeeded']}, failed: {stats['failed']}")
 
@@ -276,6 +333,8 @@ if __name__ == "__main__":
     test_new_employee()
     test_role_change()
     test_termination()
+    test_access_changes_with_entitlements()
+    test_policy_skips_disabled_provider()
     test_missing_provider_credentials()
     test_logs_and_stats()
 

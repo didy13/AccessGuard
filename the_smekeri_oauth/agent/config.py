@@ -35,6 +35,15 @@ class AgentConfig:
     # Example: {"CEO": ["microsoft", "google"], "Intern": ["microsoft"]}
     role_provider_map: dict[str, list[str]] = field(default_factory=dict)
 
+    # Richer per-role, per-provider entitlements (takes precedence when a role matches).
+    # role -> provider -> {"grant": [...], "revoke": [...]}
+    # Example:
+    #   "Software Engineer":
+    #     microsoft:
+    #       grant: [{type: aad_group, group_id: "..."}]
+    #       revoke: [{type: aad_group, group_id: "..."}]
+    role_access_map: dict[str, dict[str, dict[str, list]]] = field(default_factory=dict)
+
     # Default providers granted/revoked when no role mapping is found
     default_providers: list[str] = field(default_factory=lambda: ["microsoft"])
 
@@ -64,6 +73,7 @@ def load_config(config_path: str = "agent_config.yaml") -> AgentConfig:
         cfg.poll_interval = int(data.get("poll_interval", cfg.poll_interval))
         cfg.google_domain = data.get("google_domain", cfg.google_domain)
         cfg.role_provider_map = data.get("role_provider_map", cfg.role_provider_map)
+        cfg.role_access_map = data.get("role_access_map", cfg.role_access_map)
         cfg.default_providers = data.get("default_providers", cfg.default_providers)
         cfg.state_file = data.get("state_file", cfg.state_file)
         cfg.dashboard_enabled = bool(data.get("dashboard_enabled", cfg.dashboard_enabled))

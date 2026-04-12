@@ -12,6 +12,10 @@ from shared.schema import AgentPayload
 
 
 def record_result(payload: AgentPayload, result: ProviderResult, db: Session) -> AuditLog:
+    details = dict(result.details)
+    if payload.event_id:
+        details["event_id"] = payload.event_id
+
     entry = AuditLog(
         company_id=payload.company_id,
         employee_email=payload.employee_email,
@@ -21,7 +25,7 @@ def record_result(payload: AgentPayload, result: ProviderResult, db: Session) ->
         action=result.action,
         success=result.success,
         message=result.message,
-        details_json=json.dumps(result.details),
+        details_json=json.dumps(details),
         timestamp=datetime.utcnow(),
     )
     db.add(entry)

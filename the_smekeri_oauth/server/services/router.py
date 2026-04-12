@@ -11,9 +11,10 @@ import logging
 from sqlalchemy.orm import Session
 
 from server.providers.registry import get_provider
+from server.services.access_policy import filter_access_changes
 from server.services.credential_service import get_credentials
 from server.services.log_service import record_result
-from shared.schema import AgentPayload, ExecutionReport, ProviderResult
+from shared.schema import AgentPayload, ExecutionReport, ProviderAccessChange, ProviderResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +22,18 @@ logger = logging.getLogger(__name__)
 def process_payload(payload: AgentPayload, db: Session) -> ExecutionReport:
     results: list[ProviderResult] = []
 
-    # --- REVOKE ---
-    for provider_name in payload.saas_revoke:
-        result = _run_provider(provider_name, "revoke", payload, db)
-        results.append(result)
+    allowed_changes, policy_skips = filter_access_changes(payload, db)
+    for pr in policy_skips:
+        record_result(payload, pr, db)
+        results.append(pr)
 
-    # --- GRANT ---
-    for provider_name in payload.saas_grant:
-        result = _run_provider(provider_name, "grant", payload, db)
+    ordered = sorted(
+        allowed_changes,
+        key=lambda c: (0 if c.action == "revoke" else 1, c.provider.lower()),
+    )
+
+    for change in ordered:
+        result = _run_provider(change, payload, db)
         results.append(result)
 
     if not results:
@@ -46,17 +51,21 @@ def process_payload(payload: AgentPayload, db: Session) -> ExecutionReport:
 
 
 def _run_provider(
-    provider_name: str,
-    action: str,
+    change: ProviderAccessChange,
     payload: AgentPayload,
     db: Session,
 ) -> ProviderResult:
+    provider_name = change.provider
+    action = change.action
+    entitlements = change.entitlements
+
     try:
         provider = get_provider(provider_name)
     except ValueError as exc:
         result = ProviderResult(
             provider=provider_name, action=action,
             success=False, message=str(exc),
+            details={"entitlements": entitlements},
         )
         record_result(payload, result, db)
         return result
@@ -66,26 +75,31 @@ def _run_provider(
         result = ProviderResult(
             provider=provider_name, action=action,
             success=False,
-            message=f"No credentials configured for provider '{provider_name}' "
-                    f"on company '{payload.company_id}'",
+            message=(
+                f"No credentials configured for provider '{provider_name}' "
+                f"on company '{payload.company_id}'"
+            ),
+            details={"entitlements": entitlements},
         )
         record_result(payload, result, db)
         return result
 
     try:
         if action == "revoke":
-            result = provider.revoke(payload.employee_email, credentials)
+            result = provider.revoke(payload.employee_email, credentials, entitlements)
         else:
             result = provider.grant(
                 payload.employee_email,
                 payload.new_role or "",
                 credentials,
+                entitlements,
             )
     except Exception as exc:
         logger.exception("Unhandled error in provider %s", provider_name)
         result = ProviderResult(
             provider=provider_name, action=action,
             success=False, message=f"Unhandled exception: {exc}",
+            details={"entitlements": entitlements},
         )
 
     logger.info(

@@ -13,6 +13,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}
   .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;background:var(--surface);border-right:1px solid var(--border);padding:24px 0;display:flex;flex-direction:column;z-index:10}
+  .sidebar-foot{margin-top:auto;border-top:1px solid var(--border);padding-top:16px}
   .logo{padding:0 20px 24px;font-size:16px;font-weight:700;color:var(--accent-light)}
   .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:var(--muted);transition:all .15s}
   .nav-item:hover,.nav-item.active{background:var(--surface2);color:var(--text)}
@@ -74,6 +75,9 @@
   <div class="nav-item active" data-page="dashboard" onclick="showPage(this)">📊 Dashboard</div>
   <div class="nav-item" data-page="logs" onclick="showPage(this)">📄 Audit Logs</div>
   <div class="nav-item" data-page="companies" onclick="showPage(this)">🏢 Companies</div>
+  <div class="sidebar-foot">
+    <div class="nav-item" onclick="clearAdminKey()">Change admin key</div>
+  </div>
 </nav>
 
 <main class="main">
@@ -209,12 +213,30 @@
 
 // ── Config ────────────────────────────────────────────────────
 const API = '';
-let ADMIN_KEY = localStorage.getItem('adminKey') || '';
+let ADMIN_KEY = (localStorage.getItem('adminKey') || '').trim();
 let selectedCompany = null;
 
+function promptForAdminKey(message) {
+  const k = prompt(message || 'Enter Admin API key (same value as ADMIN_API_KEY in server .env):');
+  const t = (k || '').trim();
+  if (t) {
+    ADMIN_KEY = t;
+    localStorage.setItem('adminKey', ADMIN_KEY);
+    return true;
+  }
+  return false;
+}
+
 if (!ADMIN_KEY) {
-  ADMIN_KEY = prompt('Enter admin API key:') || '';
-  localStorage.setItem('adminKey', ADMIN_KEY);
+  promptForAdminKey(
+    'Enter Admin API key — must match ADMIN_API_KEY in your server .env (e.g. change-me-strong-admin-key).'
+  );
+}
+
+function clearAdminKey() {
+  if (!confirm('Clear saved admin key and reload the page?')) return;
+  localStorage.removeItem('adminKey');
+  location.reload();
 }
 
 // ── HTML escaping (prevent XSS when inserting text into DOM) ──
@@ -230,7 +252,19 @@ function adminHeaders() {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(API + path, { headers: adminHeaders(), ...opts });
+  const { headers: extraH, ...rest } = opts;
+  const doFetch = () =>
+    fetch(API + path, { ...rest, headers: { ...adminHeaders(), ...(extraH || {}) } });
+
+  let res = await doFetch();
+  if (res.status === 403) {
+    localStorage.removeItem('adminKey');
+    ADMIN_KEY = '';
+    toast('Invalid admin key — enter the same value as ADMIN_API_KEY in server .env', 'err');
+    if (promptForAdminKey('That key was rejected. Re-enter Admin API key (ADMIN_API_KEY from .env):')) {
+      res = await doFetch();
+    }
+  }
   if (!res.ok) throw new Error(await res.text() || res.statusText);
   if (res.status === 204) return null;
   return res.json();

@@ -12,6 +12,9 @@ from server.database.models import Company, CompanyProvider
 
 logger = logging.getLogger(__name__)
 
+# Stored when ENCRYPTION_KEY is unset and credentials are {} (e.g. mock providers in local dev).
+_EMPTY_CREDENTIALS_PLACEHOLDER = "__accessguard_empty_credentials__"
+
 
 def _fernet() -> Fernet:
     key = get_config().encryption_key
@@ -24,10 +27,26 @@ def _fernet() -> Fernet:
 
 
 def encrypt_credentials(data: dict) -> str:
+    if not data:
+        if not get_config().encryption_key.strip():
+            return _EMPTY_CREDENTIALS_PLACEHOLDER
+        return _fernet().encrypt(json.dumps(data).encode()).decode()
+    if not get_config().encryption_key.strip():
+        raise RuntimeError(
+            "ENCRYPTION_KEY is not set but non-empty provider credentials were submitted. "
+            "Set ENCRYPTION_KEY in server/.env or the project root .env, or use empty credentials."
+        )
     return _fernet().encrypt(json.dumps(data).encode()).decode()
 
 
 def decrypt_credentials(encrypted: str) -> dict:
+    if not encrypted or encrypted == _EMPTY_CREDENTIALS_PLACEHOLDER:
+        return {}
+    if not get_config().encryption_key.strip():
+        logger.warning(
+            "ENCRYPTION_KEY is not set — cannot decrypt stored credentials; treating as empty"
+        )
+        return {}
     try:
         return json.loads(_fernet().decrypt(encrypted.encode()))
     except InvalidToken:

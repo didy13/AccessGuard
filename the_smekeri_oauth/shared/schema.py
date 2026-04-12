@@ -6,15 +6,38 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ActionType(str, Enum):
     TERMINATED = "terminated"
     ROLE_CHANGED = "role_changed"
     ADDED = "added"
+
+
+class ProviderAccessChange(BaseModel):
+    """
+    One orchestrated action against a SaaS integration.
+
+    ``entitlements`` is an extensible list of dicts interpreted by each
+    provider (e.g. ``{"type": "aad_group", "group_id": "..."}``). An empty
+    list means provider-default behaviour (e.g. full session revoke, or
+    verify-user grant).
+    """
+
+    provider: str = Field(..., description="Registered provider name, e.g. microsoft")
+    action: Literal["grant", "revoke"]
+    entitlements: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Provider-specific access directives",
+    )
+
+    @field_validator("provider")
+    @classmethod
+    def provider_normalized(cls, v: str) -> str:
+        return v.strip()
 
 
 class AgentPayload(BaseModel):
@@ -28,13 +51,26 @@ class AgentPayload(BaseModel):
     previous_role: str | None = Field(None, description="Role before change (role_changed only)")
     new_role: str | None = Field(None, description="New role after change; None on termination")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    event_id: str | None = Field(
+        default=None,
+        description="Optional idempotency / correlation id (UUID recommended)",
+    )
+
+    access_changes: list[ProviderAccessChange] = Field(
+        default_factory=list,
+        description=(
+            "Preferred: ordered list of grant/revoke actions with optional entitlements "
+            "per SaaS tool. When empty, saas_revoke / saas_grant are used."
+        ),
+    )
+
     saas_revoke: list[str] = Field(
         default_factory=list,
-        description="Provider names whose access must be revoked (e.g. ['microsoft', 'google'])",
+        description="Legacy: provider names whose access must be revoked",
     )
     saas_grant: list[str] = Field(
         default_factory=list,
-        description="Provider names to which access must be granted",
+        description="Legacy: provider names to which access must be granted",
     )
     metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary extra context")
 
@@ -42,6 +78,22 @@ class AgentPayload(BaseModel):
     @classmethod
     def email_lowercase(cls, v: str) -> str:
         return v.lower().strip()
+
+    @model_validator(mode="after")
+    def populate_access_changes_from_legacy(self):
+        if self.access_changes:
+            return self
+        merged: list[ProviderAccessChange] = []
+        for p in self.saas_revoke:
+            merged.append(
+                ProviderAccessChange(provider=p, action="revoke", entitlements=[]),
+            )
+        for p in self.saas_grant:
+            merged.append(
+                ProviderAccessChange(provider=p, action="grant", entitlements=[]),
+            )
+        self.access_changes = merged
+        return self
 
     model_config = {"json_schema_extra": {
         "example": {
@@ -52,7 +104,15 @@ class AgentPayload(BaseModel):
             "action_type": "terminated",
             "previous_role": "Software Engineer",
             "new_role": None,
-            "saas_revoke": ["microsoft", "google"],
+            "event_id": "550e8400-e29b-41d4-a716-446655440000",
+            "access_changes": [
+                {
+                    "provider": "microsoft",
+                    "action": "revoke",
+                    "entitlements": [],
+                },
+            ],
+            "saas_revoke": [],
             "saas_grant": [],
             "metadata": {"frappe_employee_id": "EMP-0042"},
         }

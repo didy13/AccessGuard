@@ -19,17 +19,33 @@ class BaseProvider(ABC):
     name: str = ""   # must be set on subclass
 
     @abstractmethod
-    def revoke(self, email: str, credentials: dict) -> ProviderResult:
+    def revoke(
+        self,
+        email: str,
+        credentials: dict,
+        entitlements: list[dict] | None = None,
+    ) -> ProviderResult:
         """
-        Revoke all OAuth grants / sessions for the given user.
-        Called when an employee is terminated or loses access to this provider.
+        Revoke access for the given user.
+
+        When ``entitlements`` is empty, providers should apply their default
+        teardown (e.g. revoke OAuth grants / sessions). When non-empty, each
+        dict is a provider-specific directive such as removing group membership.
         """
         ...
 
     @abstractmethod
-    def grant(self, email: str, role: str, credentials: dict) -> ProviderResult:
+    def grant(
+        self,
+        email: str,
+        role: str,
+        credentials: dict,
+        entitlements: list[dict] | None = None,
+    ) -> ProviderResult:
         """
-        Grant access to the given user for the given role.
-        Called when an employee is added or promoted to a role that includes this provider.
+        Grant access for the given user / internal role.
+
+        When ``entitlements`` is empty, providers may verify the principal
+        exists. Non-empty lists carry structured access (groups, app roles, …).
         """
         ...

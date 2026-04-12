@@ -6,10 +6,22 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from shared.schema import ActionType, AgentPayload, ExecutionReport, ProviderResult
+from shared.schema import (
+    ActionType,
+    AgentPayload,
+    ExecutionReport,
+    ProviderAccessChange,
+    ProviderResult,
+)
 
 # Re-export for use in routes
-__all__ = ["AgentPayload", "ExecutionReport", "ProviderResult", "ActionType"]
+__all__ = [
+    "AgentPayload",
+    "ExecutionReport",
+    "ProviderAccessChange",
+    "ProviderResult",
+    "ActionType",
+]
 
 
 class EventResponse(BaseModel):

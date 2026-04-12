@@ -28,6 +28,20 @@ role_provider_map:
 # Fallback when a role is not in role_provider_map
 default_providers: ["microsoft"]
 
+# Optional: per-role, per-SaaS entitlements (overrides provider list source for matching roles).
+# Keys under each role are provider names; grant/revoke are lists of provider-specific dicts
+# (see server provider docs, e.g. type: aad_group, type: workspace_group).
+# role_access_map:
+#   "Software Engineer":
+#     microsoft:
+#       grant:
+#         - { type: aad_group, group_id: "aaaaaaaa-bbbb-cccc-dddddddddddd" }
+#       revoke:
+#         - { type: aad_group, group_id: "11111111-2222-3333-444444444444" }
+#     google:
+#       grant:
+#         - { type: workspace_group, email: "engineering@acme.com" }
+
 # Path to persist state between runs
 state_file: ".agent_state.json"
 

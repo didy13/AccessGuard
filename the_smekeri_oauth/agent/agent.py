@@ -14,6 +14,7 @@ import argparse
 import logging
 import sys
 import time
+import uuid
 from datetime import datetime, timedelta
 
 import requests
@@ -45,16 +46,46 @@ def build_connector(cfg: AgentConfig) -> BaseConnector:
 
 
 # ---------------------------------------------------------------------------
-# Provider resolution
+# Role → providers / entitlements
 # ---------------------------------------------------------------------------
 
+def _role_access_spec(role: str, cfg: AgentConfig) -> dict[str, dict] | None:
+    """Return provider → {grant, revoke} spec when ``role_access_map`` matches."""
+    role_l = (role or "").lower()
+    if not role_l or not cfg.role_access_map:
+        return None
+    for pattern, spec in cfg.role_access_map.items():
+        if pattern.lower() == role_l:
+            return spec
+    return None
+
+
 def providers_for_role(role: str, cfg: AgentConfig) -> list[str]:
-    """Return SaaS providers mapped to the given role, falling back to defaults."""
-    role_lower = role.lower()
+    """SaaS provider names for this role (``role_access_map`` overrides ``role_provider_map``)."""
+    spec = _role_access_spec(role, cfg)
+    if spec:
+        return list(spec.keys())
+    role_l = (role or "").lower()
     for pattern, providers in cfg.role_provider_map.items():
-        if pattern.lower() == role_lower:
+        if pattern.lower() == role_l:
             return providers
     return cfg.default_providers
+
+
+def _entitlements(role: str, provider: str, cfg: AgentConfig, kind: str) -> list[dict]:
+    spec = _role_access_spec(role, cfg)
+    if not spec:
+        return []
+    pinfo = spec.get(provider)
+    if pinfo is None:
+        for k, v in spec.items():
+            if k.lower() == provider.lower():
+                pinfo = v
+                break
+    if not isinstance(pinfo, dict):
+        return []
+    raw = pinfo.get(kind, [])
+    return list(raw) if isinstance(raw, list) else []
 
 
 # ---------------------------------------------------------------------------
@@ -66,19 +97,49 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
     prev_role = change.get("previous_role")
     new_role = change.get("new_role")
 
+    access_changes: list[dict] = []
+
     if action == "terminated":
-        revoke = providers_for_role(prev_role or "", cfg)
-        grant: list[str] = []
+        for p in providers_for_role(prev_role or "", cfg):
+            access_changes.append(
+                {
+                    "provider": p,
+                    "action": "revoke",
+                    "entitlements": _entitlements(prev_role or "", p, cfg, "revoke"),
+                },
+            )
     elif action == "added":
-        revoke = []
-        grant = providers_for_role(new_role or "", cfg)
+        for p in providers_for_role(new_role or "", cfg):
+            access_changes.append(
+                {
+                    "provider": p,
+                    "action": "grant",
+                    "entitlements": _entitlements(new_role or "", p, cfg, "grant"),
+                },
+            )
     else:  # role_changed
-        revoke = providers_for_role(prev_role or "", cfg)
-        grant = providers_for_role(new_role or "", cfg)
-        # Remove providers that exist in both (no change needed)
-        unchanged = set(revoke) & set(grant)
-        revoke = [p for p in revoke if p not in unchanged]
-        grant = [p for p in grant if p not in unchanged]
+        prev_ps = providers_for_role(prev_role or "", cfg)
+        new_ps = providers_for_role(new_role or "", cfg)
+        prev_set, new_set = set(prev_ps), set(new_ps)
+        for p in prev_set - new_set:
+            access_changes.append(
+                {
+                    "provider": p,
+                    "action": "revoke",
+                    "entitlements": _entitlements(prev_role or "", p, cfg, "revoke"),
+                },
+            )
+        for p in new_set - prev_set:
+            access_changes.append(
+                {
+                    "provider": p,
+                    "action": "grant",
+                    "entitlements": _entitlements(new_role or "", p, cfg, "grant"),
+                },
+            )
+
+    saas_revoke = [c["provider"] for c in access_changes if c["action"] == "revoke"]
+    saas_grant = [c["provider"] for c in access_changes if c["action"] == "grant"]
 
     return {
         "company_id": cfg.company_id,
@@ -89,8 +150,10 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
         "previous_role": prev_role,
         "new_role": new_role,
         "timestamp": datetime.utcnow().isoformat(),
-        "saas_revoke": revoke,
-        "saas_grant": grant,
+        "event_id": str(uuid.uuid4()),
+        "access_changes": access_changes,
+        "saas_revoke": saas_revoke,
+        "saas_grant": saas_grant,
         "metadata": {},
     }
 

@@ -86,14 +86,22 @@ class AgentDashboardState:
         elif not success:
             message = server_response.get("detail", "Server error")
 
+        ac = payload.get("access_changes") or []
+        if ac:
+            providers_revoked = [c["provider"] for c in ac if c.get("action") == "revoke"]
+            providers_granted = [c["provider"] for c in ac if c.get("action") == "grant"]
+        else:
+            providers_revoked = payload.get("saas_revoke", [])
+            providers_granted = payload.get("saas_grant", [])
+
         cr = ChangeRecord(
             email=change["email"],
             name=change["name"],
             action_type=change["action_type"],
             previous_role=change.get("previous_role"),
             new_role=change.get("new_role"),
-            providers_revoked=payload.get("saas_revoke", []),
-            providers_granted=payload.get("saas_grant", []),
+            providers_revoked=providers_revoked,
+            providers_granted=providers_granted,
             server_success=success,
             server_message=message,
         )

@@ -20,26 +20,39 @@ logger = logging.getLogger("accessguard.provider.mock")
 class MockProvider(BaseProvider):
     name = "mock"
 
-    def revoke(self, email: str, credentials: dict) -> ProviderResult:
+    def revoke(
+        self,
+        email: str,
+        credentials: dict,
+        entitlements: list[dict] | None = None,
+    ) -> ProviderResult:
         time.sleep(0.05)   # simulate network latency
-        logger.info("[MOCK] revoke(%s)", email)
+        ents = entitlements or []
+        logger.info("[MOCK] revoke(%s, entitlements=%s)", email, ents)
         return ProviderResult(
             provider=self.name,
             action="revoke",
             success=True,
-            message=f"[MOCK] All access revoked for {email}",
-            details={"simulated": True},
+            message=f"[MOCK] Access revoked for {email}",
+            details={"simulated": True, "entitlements": ents},
         )
 
-    def grant(self, email: str, role: str, credentials: dict) -> ProviderResult:
+    def grant(
+        self,
+        email: str,
+        role: str,
+        credentials: dict,
+        entitlements: list[dict] | None = None,
+    ) -> ProviderResult:
         time.sleep(0.05)
-        logger.info("[MOCK] grant(%s, role=%s)", email, role)
+        ents = entitlements or []
+        logger.info("[MOCK] grant(%s, role=%s, entitlements=%s)", email, role, ents)
         return ProviderResult(
             provider=self.name,
             action="grant",
             success=True,
             message=f"[MOCK] Access granted to {email} for role '{role}'",
-            details={"simulated": True, "role": role},
+            details={"simulated": True, "role": role, "entitlements": ents},
         )
 
 

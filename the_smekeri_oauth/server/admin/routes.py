@@ -99,7 +99,10 @@ def upsert_provider(
         row = CompanyProvider(company_id=company_id, provider_name=provider_name)
         db.add(row)
 
-    row.credentials_encrypted = encrypt_credentials(body.credentials)
+    try:
+        row.credentials_encrypted = encrypt_credentials(body.credentials)
+    except RuntimeError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     row.enabled = body.enabled
     db.commit()
     db.refresh(row)
