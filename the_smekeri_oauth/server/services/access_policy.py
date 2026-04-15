@@ -7,7 +7,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from server.database.models import CompanyProvider
-from shared.schema import AgentPayload, ProviderAccessChange, ProviderResult
+from shared.schema import AgentPayload, ProviderAccessChange, ProviderResult, normalize_provider_name
 
 
 def enabled_provider_names(company_id: str, db: Session) -> set[str]:
@@ -16,7 +16,12 @@ def enabled_provider_names(company_id: str, db: Session) -> set[str]:
         .filter_by(company_id=company_id, enabled=True)
         .all()
     )
-    return {r[0].lower() for r in rows}
+    names: set[str] = set()
+    for row in rows:
+        raw = str(row[0]).lower()
+        names.add(raw)
+        names.add(normalize_provider_name(raw))
+    return names
 
 
 def filter_access_changes(
@@ -32,7 +37,7 @@ def filter_access_changes(
     skipped: list[ProviderResult] = []
 
     for change in payload.access_changes:
-        key = change.provider.lower()
+        key = normalize_provider_name(change.provider)
         if key in allowed:
             kept.append(change)
             continue

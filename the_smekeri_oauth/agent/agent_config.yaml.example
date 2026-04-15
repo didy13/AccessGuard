@@ -28,6 +28,12 @@ role_provider_map:
 # Fallback when a role is not in role_provider_map
 default_providers: ["microsoft"]
 
+# Additional provider keys supported by the server:
+# bamboohr, clockify, zoho, zoho_people, microsoft365, google_workspace,
+# informatika365, erpag, workday, rippling, sage_hrms, jira, freshbooks,
+# hubspot, salesforce, sap_s4hana_cloud, oracle_fusion_erp,
+# microsoft_dynamics_365, liveagent, groove, happyfox
+
 # Optional: per-role, per-SaaS entitlements (overrides provider list source for matching roles).
 # Keys under each role are provider names; grant/revoke are lists of provider-specific dicts
 # (see server provider docs, e.g. type: aad_group, type: workspace_group).

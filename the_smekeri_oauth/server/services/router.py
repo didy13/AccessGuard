@@ -94,6 +94,18 @@ def _run_provider(
                 credentials,
                 entitlements,
             )
+    except KeyError as exc:
+        missing_key = str(exc).strip("'\"")
+        result = ProviderResult(
+            provider=provider_name, action=action,
+            success=False,
+            message=(
+                f"Missing required credential '{missing_key}' for provider '{provider_name}'. "
+                f"Configure it via: PUT /api/v1/admin/companies/{{company_id}}/providers/{provider_name}"
+            ),
+            details={"missing_credential": missing_key, "entitlements": entitlements},
+        )
+        logger.error("Missing credential '%s' for provider %s", missing_key, provider_name)
     except Exception as exc:
         logger.exception("Unhandled error in provider %s", provider_name)
         result = ProviderResult(

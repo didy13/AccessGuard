@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from server.config import get_config
 from server.database.models import Company, CompanyProvider
+from shared.schema import normalize_provider_name
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +61,13 @@ def get_credentials(company_id: str, provider_name: str, db: Session) -> dict | 
     Returns None when no provider row exists (not configured).
     Returns {} when the row exists but credentials are intentionally empty (e.g. mock providers).
     """
+    normalized = normalize_provider_name(provider_name)
+    candidate_names = {provider_name.lower(), normalized}
     row = (
         db.query(CompanyProvider)
-        .filter_by(company_id=company_id, provider_name=provider_name, enabled=True)
+        .filter(CompanyProvider.company_id == company_id)
+        .filter(CompanyProvider.enabled.is_(True))
+        .filter(CompanyProvider.provider_name.in_(candidate_names))
         .first()
     )
     if not row:

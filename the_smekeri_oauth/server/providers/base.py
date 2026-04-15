@@ -5,7 +5,38 @@ from abc import ABC, abstractmethod
 
 # Use the shared Pydantic model so results can be serialised directly
 # by FastAPI and validated by ExecutionReport without conversion.
-from shared.schema import ProviderResult  # noqa: F401 — re-exported for provider modules
+from shared.schema import ProviderResult as SchemaProviderResult
+
+
+class ProviderResult(SchemaProviderResult):
+    """
+    Backward-compatible provider result.
+
+    Existing provider implementations in this repository often instantiate
+    ProviderResult with positional arguments. This wrapper accepts both
+    positional and keyword styles while preserving the shared schema contract.
+    """
+
+    def __init__(self, *args, **kwargs):
+        if args and not kwargs:
+            if len(args) == 4:
+                provider, action, success, message = args
+                kwargs = {
+                    "provider": provider,
+                    "action": action,
+                    "success": success,
+                    "message": message,
+                }
+            elif len(args) == 5:
+                provider, action, success, message, details = args
+                kwargs = {
+                    "provider": provider,
+                    "action": action,
+                    "success": success,
+                    "message": message,
+                    "details": details,
+                }
+        super().__init__(**kwargs)
 
 
 class BaseProvider(ABC):

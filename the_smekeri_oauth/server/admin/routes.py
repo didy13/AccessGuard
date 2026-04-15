@@ -22,6 +22,7 @@ from server.models.company import (
 )
 from server.providers.registry import list_providers
 from server.services.credential_service import encrypt_credentials
+from shared.schema import normalize_provider_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -91,12 +92,18 @@ def upsert_provider(
     db: Session = Depends(get_db),
 ):
     _get_company_or_404(company_id, db)
-    if provider_name not in list_providers():
+    normalized_name = normalize_provider_name(provider_name)
+    if body.provider_name and normalize_provider_name(body.provider_name) != normalized_name:
+        raise HTTPException(
+            400,
+            f"Path provider '{provider_name}' does not match body.provider_name '{body.provider_name}'",
+        )
+    if normalized_name not in list_providers():
         raise HTTPException(400, f"Unknown provider '{provider_name}'. Available: {list_providers()}")
 
-    row = db.query(CompanyProvider).filter_by(company_id=company_id, provider_name=provider_name).first()
+    row = db.query(CompanyProvider).filter_by(company_id=company_id, provider_name=normalized_name).first()
     if not row:
-        row = CompanyProvider(company_id=company_id, provider_name=provider_name)
+        row = CompanyProvider(company_id=company_id, provider_name=normalized_name)
         db.add(row)
 
     try:
@@ -111,7 +118,8 @@ def upsert_provider(
 
 @router.delete("/companies/{company_id}/providers/{provider_name}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_provider(company_id: str, provider_name: str, db: Session = Depends(get_db)):
-    row = db.query(CompanyProvider).filter_by(company_id=company_id, provider_name=provider_name).first()
+    normalized_name = normalize_provider_name(provider_name)
+    row = db.query(CompanyProvider).filter_by(company_id=company_id, provider_name=normalized_name).first()
     if not row:
         raise HTTPException(404, "Provider not found")
     db.delete(row)

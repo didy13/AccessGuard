@@ -4,11 +4,27 @@ Both sides import from this module to guarantee format compatibility.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def normalize_provider_name(value: str) -> str:
+    raw = (value or "").strip().lower()
+    key = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+    aliases = {
+        "microsoft_365": "microsoft",
+        "microsoft_365_entra_id": "microsoft",
+        "entra_id": "microsoft",
+        "azure": "microsoft",
+        "google_workspace": "google",
+        "zoho_people": "zoho",
+        "sap_s_4hana_cloud": "sap_s4hana_cloud",
+    }
+    return aliases.get(key, key)
 
 
 class ActionType(str, Enum):
@@ -37,7 +53,7 @@ class ProviderAccessChange(BaseModel):
     @field_validator("provider")
     @classmethod
     def provider_normalized(cls, v: str) -> str:
-        return v.strip()
+        return normalize_provider_name(v)
 
 
 class AgentPayload(BaseModel):

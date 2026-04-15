@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from shared.schema import normalize_provider_name
+
 if TYPE_CHECKING:
     from .base import BaseProvider
 
@@ -17,11 +19,11 @@ _registry: dict[str, type[BaseProvider]] = {}
 
 
 def register_provider(name: str, cls: type[BaseProvider]) -> None:
-    _registry[name.lower()] = cls
+    _registry[normalize_provider_name(name)] = cls
 
 
 def get_provider(name: str) -> BaseProvider:
-    cls = _registry.get(name.lower())
+    cls = _registry.get(normalize_provider_name(name))
     if cls is None:
         raise ValueError(
             f"Provider '{name}' is not registered. "

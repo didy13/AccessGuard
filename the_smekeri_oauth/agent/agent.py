@@ -121,7 +121,7 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
         prev_ps = providers_for_role(prev_role or "", cfg)
         new_ps = providers_for_role(new_role or "", cfg)
         prev_set, new_set = set(prev_ps), set(new_ps)
-        for p in prev_set - new_set:
+        for p in sorted(prev_set - new_set):
             access_changes.append(
                 {
                     "provider": p,
@@ -129,7 +129,7 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
                     "entitlements": _entitlements(prev_role or "", p, cfg, "revoke"),
                 },
             )
-        for p in new_set - prev_set:
+        for p in sorted(new_set - prev_set):
             access_changes.append(
                 {
                     "provider": p,
@@ -137,6 +137,27 @@ def build_payload(change: dict, cfg: AgentConfig) -> dict:
                     "entitlements": _entitlements(new_role or "", p, cfg, "grant"),
                 },
             )
+        # Real-world mover scenario: same provider often needs entitlement swap
+        # (e.g. remove old group, grant new group) even if provider list is unchanged.
+        for p in sorted(prev_set & new_set):
+            revoke_ents = _entitlements(prev_role or "", p, cfg, "revoke")
+            grant_ents = _entitlements(new_role or "", p, cfg, "grant")
+            if revoke_ents:
+                access_changes.append(
+                    {
+                        "provider": p,
+                        "action": "revoke",
+                        "entitlements": revoke_ents,
+                    },
+                )
+            if grant_ents:
+                access_changes.append(
+                    {
+                        "provider": p,
+                        "action": "grant",
+                        "entitlements": grant_ents,
+                    },
+                )
 
     saas_revoke = [c["provider"] for c in access_changes if c["action"] == "revoke"]
     saas_grant = [c["provider"] for c in access_changes if c["action"] == "grant"]
