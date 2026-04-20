@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 from .config import AgentConfig, load_config
 from .connectors.base import BaseConnector
 from .connectors.frappe import FrappeConnector
+from .connectors.mock import MockConnector
 from .state import diff_snapshots, load_state, save_state
 
 load_dotenv()
@@ -42,6 +43,8 @@ def build_connector(cfg: AgentConfig) -> BaseConnector:
     c = cfg.connector
     if c.type == "frappe":
         return FrappeConnector(c.base_url, c.api_key, c.api_secret)
+    if c.type == "mock":
+        return MockConnector()
     raise ValueError(f"Unknown connector type: {c.type!r}")
 
 

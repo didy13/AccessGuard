@@ -1,0 +1,17 @@
+{
+  "alice@testcorp.com": {
+    "name": "Alice Smith",
+    "role": "Software Engineer",
+    "status": "active"
+  },
+  "bob@testcorp.com": {
+    "name": "Bob Jones",
+    "role": "Finance Manager",
+    "status": "active"
+  },
+  "carol@testcorp.com": {
+    "name": "Carol White",
+    "role": "Accountant",
+    "status": "left"
+  }
+}

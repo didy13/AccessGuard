@@ -1,0 +1,59 @@
+# Agent configuration example — copy to agent_config.yaml and fill in values.
+
+company_id: "test-corp"
+company_name: "Test Corp"
+
+# URL of YOUR server that receives events
+server_url: "http://localhost:8000"
+server_api_key: ""
+
+# Polling interval in seconds (default 900 = 15 minutes)
+poll_interval: 900
+
+# Email domain used to distinguish Google Workspace users
+google_domain: "@acme.com"
+
+# Maps job titles to SaaS providers.
+# Employees with roles NOT listed here get default_providers.
+role_provider_map:
+  "CEO":                    ["microsoft", "google"]
+  "Finance Manager":        ["microsoft", "google"]
+  "Software Engineer":      ["microsoft", "google"]
+  "Business Analyst":       ["microsoft", "google"]
+  "Accountant":             ["microsoft"]
+  "Administrative Assistant": ["microsoft"]
+  "Secretary":              ["microsoft"]
+  "Consultant":             ["microsoft"]
+
+# Fallback when a role is not in role_provider_map
+default_providers: ["microsoft"]
+
+# Additional provider keys supported by the server:
+# bamboohr, clockify, zoho, zoho_people, microsoft365, google_workspace,
+# informatika365, erpag, workday, rippling, sage_hrms, jira, freshbooks,
+# hubspot, salesforce, sap_s4hana_cloud, oracle_fusion_erp,
+# microsoft_dynamics_365, liveagent, groove, happyfox
+
+# Optional: per-role, per-SaaS entitlements (overrides provider list source for matching roles).
+# Keys under each role are provider names; grant/revoke are lists of provider-specific dicts
+# (see server provider docs, e.g. type: aad_group, type: workspace_group).
+# role_access_map:
+#   "Software Engineer":
+#     microsoft:
+#       grant:
+#         - { type: aad_group, group_id: "aaaaaaaa-bbbb-cccc-dddddddddddd" }
+#       revoke:
+#         - { type: aad_group, group_id: "11111111-2222-3333-444444444444" }
+#     google:
+#       grant:
+#         - { type: workspace_group, email: "engineering@acme.com" }
+
+# Path to persist state between runs
+state_file: ".agent_state.json"
+
+# Local dashboard UI (http://localhost:7979)
+dashboard_enabled: true
+dashboard_port: 7979
+
+connector:
+  type: "mock"

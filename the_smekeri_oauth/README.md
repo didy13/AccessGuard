@@ -120,10 +120,21 @@ AUTH_ENABLED=false          # skip auth for local testing
 ```bash
 pip install -r requirements.txt
 uvicorn server.main:app --reload
-password: change-me
 ```
 
-#### Step 4 — Run the automated test suite
+The server starts at `http://localhost:8000`. Interactive API docs at `http://localhost:8000/docs`.
+
+#### Step 4 — Add a test company
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/admin/companies \
+  -H "X-Admin-Key: change-me-strong-admin-key" \
+  -H "Content-Type: application/json" \
+  -d '{"company_id":"demo-corp","company_name":"Demo Corp","enabled":true}' \
+  | python -m json.tool
+```
+
+#### Step 5 — Run the automated test suite
 
 ```bash
 python test_local.py
@@ -137,55 +148,62 @@ This will:
 - Verify audit logs and stats
 - Print a full summary
 
-#### Step 5 — Open the dashboard
+#### Step 6 — Open the dashboard
 
 ```
 http://localhost:8000
 ```
 
-Admin API key: `dev-admin-key-change-me`
+Admin API key for the panel: `change-me-strong-admin-key`
 
 ---
 
-### Mock Employee Database (for agent testing)
+### Mock Agent Connector (no Frappe instance needed)
 
-Copy this to `agent_config.yaml` and create a `mock_employees.json` alongside the agent:
+The agent ships with a built-in `mock` connector that returns hardcoded employees.
+Use this to test the full agent → server → provider pipeline without any external systems.
 
 **`agent_config.yaml`** (for local testing):
 ```yaml
 company_id: "demo-corp"
 company_name: "Demo Corp"
 server_url: "http://localhost:8000"
-server_api_key: "dev-agent-key-change-me"
-poll_interval: 10    # 10 seconds for fast testing
+server_api_key: ""
+poll_interval: 10    # 10 seconds for fast iteration
 
 role_provider_map:
-  "CEO":               ["mock_microsoft", "mock_google"]
   "Software Engineer": ["mock_microsoft", "mock_google"]
+  "Finance Manager":   ["mock_microsoft", "mock_google"]
   "Accountant":        ["mock_microsoft"]
-  "Intern":            ["mock_microsoft"]
 
 default_providers: ["mock_microsoft"]
 
 connector:
-  type: "frappe"
-  base_url: "http://localhost:8001"   # a local Frappe dev instance, or see below
+  type: "mock"    # no Frappe needed — returns fake employees from agent/connectors/mock.py
 ```
 
-**If you don't have a Frappe instance**, you can test the agent's change detection logic
-by directly calling the server's event endpoint. The test scenarios below use `curl`:
+The mock connector returns three employees (Alice active, Bob active, Carol left).
+To simulate a change between runs, edit `agent/connectors/mock.py` and change a status or role.
+
+**Run the agent:**
+```bash
+python -m agent.agent --config agent/agent_config.yaml
+```
+
+You can also test the server directly without the agent using `curl`:
 
 ---
 
 ### Test Scenarios with curl
 
-All examples assume `AUTH_ENABLED=false` and the server at `localhost:8000`.
+All examples assume `AUTH_ENABLED=false` (set in `server/.env`) and the server at `localhost:8000`.
+The `X-API-Key` header can be empty when auth is disabled.
 
 #### Scenario A — New employee added
 ```bash
 curl -s -X POST http://localhost:8000/api/v1/events \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-agent-key-change-me" \
+  -H "X-API-Key: " \
   -d '{
     "company_id": "demo-corp",
     "company_name": "Demo Corp",
@@ -207,7 +225,7 @@ curl -s -X POST http://localhost:8000/api/v1/events \
 ```bash
 curl -s -X POST http://localhost:8000/api/v1/events \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-agent-key-change-me" \
+  -H "X-API-Key: " \
   -d '{
     "company_id": "demo-corp",
     "company_name": "Demo Corp",
@@ -229,7 +247,7 @@ curl -s -X POST http://localhost:8000/api/v1/events \
 ```bash
 curl -s -X POST http://localhost:8000/api/v1/events \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-agent-key-change-me" \
+  -H "X-API-Key: " \
   -d '{
     "company_id": "demo-corp",
     "company_name": "Demo Corp",
@@ -489,7 +507,8 @@ accessguard/
 │   ├── state.py              # Change detection (diff snapshots)
 │   ├── connectors/
 │   │   ├── base.py           # EmployeeRecord + BaseConnector ABC
-│   │   └── frappe.py         # Frappe/ERPNext connector
+│   │   ├── frappe.py         # Frappe/ERPNext connector
+│   │   └── mock.py           # Fake employees for local testing (no Frappe needed)
 │   └── agent_config.yaml.example
 │
 ├── server/                   # Our infrastructure
