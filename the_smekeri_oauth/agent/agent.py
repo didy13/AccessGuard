@@ -11,11 +11,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
@@ -63,12 +65,32 @@ def _role_access_spec(role: str, cfg: AgentConfig) -> dict[str, dict] | None:
     return None
 
 
+def _load_ui_role_mappings(ui_mappings_file: str) -> dict[str, list[str]]:
+    """Load role → providers from UI-configured mappings file (if it exists)."""
+    p = Path(ui_mappings_file)
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text())
+        return data.get("role_provider_map", {})
+    except Exception:
+        return {}
+
+
 def providers_for_role(role: str, cfg: AgentConfig) -> list[str]:
-    """SaaS provider names for this role (``role_access_map`` overrides ``role_provider_map``)."""
+    """SaaS provider names for this role.
+
+    Lookup order: role_access_map (YAML) → UI mappings → role_provider_map (YAML) → default
+    """
     spec = _role_access_spec(role, cfg)
     if spec:
         return list(spec.keys())
     role_l = (role or "").lower()
+    ui_file = getattr(cfg, "ui_mappings_file", ".agent_ui_role_mappings.json")
+    ui_map = _load_ui_role_mappings(ui_file)
+    for pattern, providers in ui_map.items():
+        if pattern.lower() == role_l:
+            return providers
     for pattern, providers in cfg.role_provider_map.items():
         if pattern.lower() == role_l:
             return providers
@@ -237,7 +259,6 @@ def run_once(connector: BaseConnector, cfg: AgentConfig) -> None:
     from .dashboard_state import state as dash_state
 
     logger.info("Polling %s connector…", cfg.connector.type)
-    scan = dash_state.start_scan()
 
     current_employees = connector.get_all_employees()
     if not current_employees:
@@ -245,6 +266,11 @@ def run_once(connector: BaseConnector, cfg: AgentConfig) -> None:
         return
 
     previous_state = load_state(cfg.state_file)
+    is_initial_sync = len(previous_state) == 0
+    if is_initial_sync:
+        logger.info("No previous state found — performing initial sync of all employees")
+
+    scan = dash_state.start_scan(is_initial_sync=is_initial_sync)
     changes = diff_snapshots(previous_state, current_employees)
 
     if not changes:

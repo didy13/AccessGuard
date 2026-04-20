@@ -26,6 +26,7 @@ class ChangeRecord:
 @dataclass
 class ScanRecord:
     scanned_at: datetime
+    is_initial_sync: bool = False
     changes: list[ChangeRecord] = field(default_factory=list)
 
     @property
@@ -50,6 +51,8 @@ class AgentDashboardState:
         self.last_scan: datetime | None = None
         self.next_scan: datetime | None = None
         self.scan_history: list[ScanRecord] = []
+        self.state_file: str = ".agent_state.json"
+        self.ui_mappings_file: str = ".agent_ui_role_mappings.json"
 
     def init(self, cfg: AgentConfig) -> None:
         with self._lock:
@@ -57,9 +60,11 @@ class AgentDashboardState:
             self.company_name = cfg.company_name
             self.connector_type = cfg.connector.type
             self.poll_interval = cfg.poll_interval
+            self.state_file = cfg.state_file
+            self.ui_mappings_file = getattr(cfg, "ui_mappings_file", ".agent_ui_role_mappings.json")
 
-    def start_scan(self) -> ScanRecord:
-        record = ScanRecord(scanned_at=datetime.utcnow())
+    def start_scan(self, is_initial_sync: bool = False) -> ScanRecord:
+        record = ScanRecord(scanned_at=datetime.utcnow(), is_initial_sync=is_initial_sync)
         with self._lock:
             self.last_scan = record.scanned_at
             self.scan_history.insert(0, record)
@@ -123,6 +128,7 @@ class AgentDashboardState:
                         "scanned_at": s.scanned_at.isoformat(),
                         "changes_count": s.changes_count,
                         "all_succeeded": s.all_succeeded,
+                        "is_initial_sync": s.is_initial_sync,
                         "changes": [
                             {
                                 "email": c.email,

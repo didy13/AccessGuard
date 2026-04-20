@@ -16,11 +16,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, sta
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from server.admin.routes import router as admin_router
 from server.config import get_config
 from server.database.db import create_all_tables, get_db
+from server.database.models import AuditLog
 from server.models.log import AuditLogOut, LogStatsOut
 from server.models.payload import AgentPayload, EventResponse
 from server.services.credential_service import company_exists, verify_agent_api_key
@@ -123,11 +125,12 @@ def ingest_event(
 @app.get("/api/v1/logs", response_model=list[AuditLogOut])
 def query_logs(
     company_id: str | None = Query(None),
+    employee_email: str | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return get_logs(db, company_id=company_id, limit=limit, offset=offset)
+    return get_logs(db, company_id=company_id, employee_email=employee_email, limit=limit, offset=offset)
 
 
 @app.get("/api/v1/logs/stats", response_model=LogStatsOut)
@@ -136,6 +139,80 @@ def log_stats(
     db: Session = Depends(get_db),
 ):
     return get_stats(db, company_id=company_id)
+
+
+# ---------------------------------------------------------------------------
+# Users API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/users")
+def list_users(
+    company_id: str | None = Query(None),
+    search: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return distinct users seen in audit logs, with optional search/filter."""
+    subq = (
+        db.query(
+            AuditLog.employee_email,
+            AuditLog.employee_name,
+            AuditLog.company_id,
+            func.max(AuditLog.timestamp).label("last_seen"),
+        )
+        .group_by(AuditLog.employee_email, AuditLog.company_id)
+    )
+    if company_id:
+        subq = subq.filter(AuditLog.company_id == company_id)
+    if search:
+        subq = subq.filter(
+            (AuditLog.employee_email.ilike(f"%{search}%"))
+            | (AuditLog.employee_name.ilike(f"%{search}%"))
+        )
+    rows = subq.order_by(func.max(AuditLog.timestamp).desc()).all()
+    return [
+        {
+            "email": r.employee_email,
+            "name": r.employee_name,
+            "company_id": r.company_id,
+            "last_seen": r.last_seen,
+        }
+        for r in rows
+    ]
+
+
+@app.get("/api/v1/users/{email}/tokens")
+def user_tokens(
+    email: str,
+    company_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return the most-recent access state per provider for a given user."""
+    subq = (
+        db.query(AuditLog.provider, func.max(AuditLog.id).label("max_id"))
+        .filter(AuditLog.employee_email == email)
+    )
+    if company_id:
+        subq = subq.filter(AuditLog.company_id == company_id)
+    subq = subq.group_by(AuditLog.provider).subquery()
+
+    rows = (
+        db.query(AuditLog)
+        .join(subq, AuditLog.id == subq.c.max_id)
+        .order_by(AuditLog.provider)
+        .all()
+    )
+    return [
+        {
+            "provider": r.provider,
+            "action": r.action,
+            "success": r.success,
+            "has_access": r.action == "grant" and r.success,
+            "action_type": r.action_type,
+            "timestamp": r.timestamp,
+            "message": r.message,
+        }
+        for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

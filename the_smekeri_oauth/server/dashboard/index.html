@@ -74,6 +74,7 @@
   <div class="logo">🛡 AccessGuard</div>
   <div class="nav-item active" data-page="dashboard" onclick="showPage(this)">📊 Dashboard</div>
   <div class="nav-item" data-page="logs" onclick="showPage(this)">📄 Audit Logs</div>
+  <div class="nav-item" data-page="users" onclick="showPage(this)">👥 Users</div>
   <div class="nav-item" data-page="companies" onclick="showPage(this)">🏢 Companies</div>
   <div class="sidebar-foot">
     <div class="nav-item" onclick="clearAdminKey()">Change admin key</div>
@@ -109,7 +110,10 @@
   <div id="page-logs" class="page">
     <div class="page-header">
       <div class="page-title">Audit Logs</div>
-      <select id="logs-filter" onchange="loadLogs()"><option value="">All Companies</option></select>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="logs-search" placeholder="Search employee…" style="width:200px" oninput="loadLogs()" />
+        <select id="logs-filter" onchange="loadLogs()"><option value="">All Companies</option></select>
+      </div>
     </div>
     <div class="card">
       <div class="card-header">
@@ -119,6 +123,24 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Time</th><th>Company</th><th>Employee</th><th>Action</th><th>Provider</th><th>Op</th><th>Status</th><th>Message</th></tr></thead>
         <tbody id="logs-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div id="page-users" class="page">
+    <div class="page-header">
+      <div class="page-title">Users</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="users-search" placeholder="Search by name or email…" style="width:220px" oninput="loadUsers()" />
+        <select id="users-filter" onchange="loadUsers()"><option value="">All Companies</option></select>
+        <button class="btn btn-g btn-sm" onclick="loadUsers()">↺ Refresh</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Employee</th><th>Company</th><th>Last Seen</th><th>Actions</th></tr></thead>
+        <tbody id="users-tbody"></tbody>
       </table></div>
     </div>
   </div>
@@ -153,6 +175,25 @@
   </div>
 
 </main>
+
+<!-- TOKEN CHECKER MODAL -->
+<div id="modal-tokens" class="modal-overlay">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="tokens-modal-name">User Tokens</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px" id="tokens-modal-email"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-tokens')">✕</button>
+    </div>
+    <div class="modal-body" id="tokens-modal-body" style="padding:0">
+      <div class="empty" style="padding:40px">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-tokens')">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODALS -->
 <div id="modal-company" class="modal-overlay">
@@ -376,6 +417,7 @@ function showPage(el) {
   el.classList.add('active');
   if (page === 'dashboard') loadDashboard();
   if (page === 'logs') loadLogs();
+  if (page === 'users') loadUsers();
   if (page === 'companies') loadCompanies();
 }
 
@@ -391,7 +433,7 @@ function showTab(tabId, el) {
 
 // ── Populate company selects ──────────────────────────────────
 function populateSelects(companies) {
-  ['dash-filter', 'logs-filter'].forEach(id => {
+  ['dash-filter', 'logs-filter', 'users-filter'].forEach(id => {
     const sel = document.getElementById(id);
     const val = sel.value;
     // Remove all options except the first ("All Companies")
@@ -431,16 +473,166 @@ async function loadDashboard() {
 // ── Logs ──────────────────────────────────────────────────────
 async function loadLogs() {
   const company = document.getElementById('logs-filter').value;
-  const qs = company
-    ? `?limit=200&company_id=${encodeURIComponent(company)}`
-    : '?limit=200';
+  const search  = (document.getElementById('logs-search').value || '').trim();
+  const params  = new URLSearchParams({ limit: '200' });
+  if (company) params.set('company_id', company);
+  if (search)  params.set('employee_email', search);
   try {
-    const logs = await publicApi('/api/v1/logs' + qs);
+    const logs = await publicApi('/api/v1/logs?' + params.toString());
     const tbody = document.getElementById('logs-tbody');
     tbody.replaceChildren();
     if (!logs.length) { tbody.appendChild(emptyRow(8, 'No logs found')); return; }
     logs.forEach(l => tbody.appendChild(logRow(l, true)));
   } catch (e) { toast('Logs error: ' + e.message, 'err'); }
+}
+
+// ── Users ──────────────────────────────────────────────────────
+async function loadUsers() {
+  const company = document.getElementById('users-filter').value;
+  const search  = (document.getElementById('users-search').value || '').trim();
+  const params  = new URLSearchParams();
+  if (company) params.set('company_id', company);
+  if (search)  params.set('search', search);
+  const qs = params.toString() ? '?' + params.toString() : '';
+  try {
+    const users = await publicApi('/api/v1/users' + qs);
+    const tbody = document.getElementById('users-tbody');
+    tbody.replaceChildren();
+    if (!users.length) { tbody.appendChild(emptyRow(4, 'No users found')); return; }
+    users.forEach(u => tbody.appendChild(userRow(u)));
+  } catch (e) { toast('Users error: ' + e.message, 'err'); }
+}
+
+function userRow(u) {
+  const tr = document.createElement('tr');
+
+  const empTd = document.createElement('td');
+  const nameDiv = document.createElement('div');
+  nameDiv.style.fontWeight = '500';
+  nameDiv.textContent = u.name;
+  const emailDiv = document.createElement('div');
+  emailDiv.style.cssText = 'color:var(--muted);font-size:11px;margin-top:2px';
+  emailDiv.textContent = u.email;
+  empTd.appendChild(nameDiv);
+  empTd.appendChild(emailDiv);
+  tr.appendChild(empTd);
+
+  const compTd = document.createElement('td');
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = u.company_id;
+  compTd.appendChild(tag);
+  tr.appendChild(compTd);
+
+  const lastTd = document.createElement('td');
+  lastTd.style.cssText = 'color:var(--muted);font-size:12px;white-space:nowrap';
+  lastTd.textContent = u.last_seen ? fmtDate(u.last_seen) : '—';
+  tr.appendChild(lastTd);
+
+  const actTd = document.createElement('td');
+  actTd.style.cssText = 'display:flex;gap:6px;align-items:center;padding:12px';
+
+  const tokenBtn = document.createElement('button');
+  tokenBtn.className = 'btn btn-g btn-sm';
+  tokenBtn.textContent = '🔑 Check Tokens';
+  tokenBtn.onclick = () => openTokensModal(u.email, u.name, u.company_id);
+
+  const logsBtn = document.createElement('button');
+  logsBtn.className = 'btn btn-g btn-sm';
+  logsBtn.textContent = '📄 Logs';
+  logsBtn.onclick = () => {
+    document.getElementById('logs-search').value = u.email;
+    document.getElementById('logs-filter').value = u.company_id;
+    showPage(document.querySelector('[data-page="logs"]'));
+  };
+
+  actTd.appendChild(tokenBtn);
+  actTd.appendChild(logsBtn);
+  tr.appendChild(actTd);
+  return tr;
+}
+
+function makeAccessBadge(hasAccess) {
+  const span = document.createElement('span');
+  span.className = 'badge ' + (hasAccess ? 'b-ok' : 'b-err');
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  span.appendChild(dot);
+  span.appendChild(document.createTextNode(hasAccess ? ' Active' : ' Revoked / None'));
+  return span;
+}
+
+async function openTokensModal(email, name, companyId) {
+  document.getElementById('tokens-modal-name').textContent = name;
+  document.getElementById('tokens-modal-email').textContent = email;
+  const body = document.getElementById('tokens-modal-body');
+  const loading = document.createElement('div');
+  loading.className = 'empty';
+  loading.style.padding = '40px';
+  loading.textContent = 'Loading…';
+  body.replaceChildren(loading);
+  document.getElementById('modal-tokens').classList.add('open');
+
+  try {
+    const params = new URLSearchParams();
+    if (companyId) params.set('company_id', companyId);
+    const tokens = await publicApi(`/api/v1/users/${encodeURIComponent(email)}/tokens?${params.toString()}`);
+    body.replaceChildren();
+
+    if (!tokens.length) {
+      const el = document.createElement('div');
+      el.className = 'empty';
+      el.style.padding = '40px';
+      el.textContent = 'No token history found for this user.';
+      body.appendChild(el);
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Provider', 'Access', 'Last Action', 'Timestamp', 'Message'].forEach(t => {
+      const th = document.createElement('th');
+      th.textContent = t;
+      hrow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+
+    tokens.forEach(t => {
+      const row = tbody.insertRow();
+
+      const provTd = row.insertCell();
+      const provBadge = document.createElement('span');
+      provBadge.className = 'badge b-info';
+      provBadge.textContent = t.provider;
+      provTd.appendChild(provBadge);
+
+      row.insertCell().appendChild(makeAccessBadge(t.has_access));
+
+      const actionTd = row.insertCell();
+      const actionSpan = document.createElement('span');
+      actionSpan.className = 'badge b-muted';
+      actionSpan.textContent = `${t.action_type} → ${t.action}`;
+      actionTd.appendChild(actionSpan);
+
+      const timeTd = row.insertCell();
+      timeTd.style.cssText = 'color:var(--muted);font-size:12px;white-space:nowrap';
+      timeTd.textContent = t.timestamp ? fmtDate(t.timestamp) : '—';
+
+      const msgTd = row.insertCell();
+      msgTd.style.cssText = 'color:var(--muted);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis';
+      msgTd.textContent = t.message || '—';
+    });
+
+    body.appendChild(table);
+  } catch (e) {
+    const errDiv = document.createElement('div');
+    errDiv.className = 'empty';
+    errDiv.style.cssText = 'padding:40px;color:var(--danger)';
+    errDiv.textContent = 'Error: ' + e.message;
+    body.replaceChildren(errDiv);
+  }
 }
 
 // ── Companies ─────────────────────────────────────────────────

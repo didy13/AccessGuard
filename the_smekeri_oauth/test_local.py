@@ -430,6 +430,98 @@ def test_generic_preview_flow() -> None:
         print(f"    [{status}] {r['provider']}.{r['action']} -> {r['message'][:80]}")
 
 
+def seed_demo_users() -> None:
+    """Seed demo-corp with realistic mock users so the Users page is populated."""
+    info("Seeding demo-corp users…")
+
+    demo_users = [
+        {
+            "email": "stefan.markovic@demo-corp.com",
+            "name": "Stefan Marković",
+            "role": "Software Engineer",
+            "action": "added",
+            "providers": ["mock_microsoft", "mock_google"],
+        },
+        {
+            "email": "ana.jovanovic@demo-corp.com",
+            "name": "Ana Jovanović",
+            "role": "Finance Manager",
+            "action": "added",
+            "providers": ["mock_microsoft", "mock_google"],
+        },
+        {
+            "email": "nikola.petrovic@demo-corp.com",
+            "name": "Nikola Petrović",
+            "role": "CEO",
+            "action": "added",
+            "providers": ["mock_microsoft", "mock_google"],
+        },
+        {
+            "email": "milica.stojanovic@demo-corp.com",
+            "name": "Milica Stojanović",
+            "role": "Accountant",
+            "action": "added",
+            "providers": ["mock_microsoft"],
+        },
+        {
+            "email": "jovana.ilic@demo-corp.com",
+            "name": "Jovana Ilić",
+            "role": "Software Engineer",
+            "action": "added",
+            "providers": ["mock_microsoft", "mock_google"],
+        },
+        {
+            "email": "marko.djordjevic@demo-corp.com",
+            "name": "Marko Đorđević",
+            "role": "Intern",
+            "action": "added",
+            "providers": ["mock_microsoft"],
+        },
+        {
+            "email": "stefan.test@demo-corp.com",
+            "name": "Stefke Test",
+            "role": "Software Engineer",
+            "action": "added",
+            "providers": ["mock_microsoft", "mock_google"],
+        },
+    ]
+
+    for u in demo_users:
+        payload = make_payload(
+            action=u["action"],
+            email=u["email"],
+            name=u["name"],
+            new_role=u["role"],
+            grant=u["providers"],
+        )
+        result = send_event(payload)
+        ok(f"{u['name']} ({u['role']}) — {len(result['results'])} provider(s)")
+
+    # Sara Radović terminated (left company)
+    payload = make_payload(
+        action="terminated",
+        email="sara.radovic@demo-corp.com",
+        name="Sara Radović",
+        prev_role="Finance Manager",
+        revoke=["mock_microsoft", "mock_google"],
+    )
+    send_event(payload)
+    ok("Sara Radović terminated — access revoked")
+
+    # Marko promoted from Intern to Software Engineer
+    payload = make_payload(
+        action="role_changed",
+        email="marko.djordjevic@demo-corp.com",
+        name="Marko Đorđević",
+        prev_role="Intern",
+        new_role="Software Engineer",
+        revoke=["mock_microsoft"],
+        grant=["mock_google"],
+    )
+    send_event(payload)
+    ok("Marko Đorđević promoted — access updated")
+
+
 def test_logs_and_stats() -> None:
     info("Checking audit logs and stats…")
     logs = get_logs(COMPANY_ID, limit=20)
@@ -463,6 +555,7 @@ if __name__ == "__main__":
     ok("Server is reachable")
 
     setup_company()
+    seed_demo_users()
     test_new_employee()
     test_role_change()
     test_mover_same_provider_entitlement_swap()
