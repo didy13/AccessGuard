@@ -152,4 +152,4 @@ app.include_router(admin_router, prefix="/api/v1")
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def dashboard():
     html_path = Path(__file__).parent / "dashboard" / "index.html"
-    return HTMLResponse(content=html_path.read_text())
+    return HTMLResponse(content=html_path.read_text(encoding='utf-8'))

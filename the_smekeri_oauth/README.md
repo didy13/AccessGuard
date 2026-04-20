@@ -154,7 +154,7 @@ This will:
 http://localhost:8000
 ```
 
-Admin API key for the panel: `change-me-strong-admin-key`
+Admin API key for the panel: `admin1234567891011`
 
 ---
 
