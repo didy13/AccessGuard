@@ -19,8 +19,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import requests as http_client
+
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from .dashboard_state import state
 from .state import load_state
@@ -138,6 +140,158 @@ async def api_stream():
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Server proxy routes — forward requests to the AccessGuard server
+# ---------------------------------------------------------------------------
+
+def _server_url() -> str:
+    if not state.server_url:
+        raise HTTPException(503, "server_url not configured in agent config")
+    return state.server_url
+
+
+@app.get("/api/server/employees/{email}/tokens")
+def proxy_employee_tokens(email: str):
+    """Proxy: current access state per provider (from server audit log)."""
+    try:
+        r = http_client.get(
+            f"{_server_url()}/api/v1/users/{email}/tokens",
+            params={"company_id": state.company_id},
+            timeout=10,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+
+
+@app.post("/api/server/employees/{email}/action")
+async def proxy_employee_action(email: str, request: Request):
+    """Proxy: trigger manual grant/revoke on server (requires admin key)."""
+    body = await request.json()
+    if not state.server_admin_key:
+        raise HTTPException(403, "server_admin_key not configured in agent config")
+    try:
+        r = http_client.post(
+            f"{_server_url()}/api/v1/companies/{state.company_id}/employees/{email}/action",
+            json=body,
+            headers={"X-Admin-Key": state.server_admin_key},
+            timeout=30,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+
+
+@app.get("/api/server/employees/{email}/logs")
+def proxy_employee_logs(email: str):
+    """Proxy: fetch audit logs for a specific employee."""
+    try:
+        r = http_client.get(
+            f"{_server_url()}/api/v1/logs",
+            params={"employee_email": email, "company_id": state.company_id, "limit": 50},
+            timeout=10,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+
+
+@app.get("/api/server/roles")
+def proxy_roles():
+    """Proxy: get role mappings configured on the server for this company."""
+    if not state.server_admin_key:
+        raise HTTPException(403, "server_admin_key not configured")
+    try:
+        r = http_client.get(
+            f"{_server_url()}/api/v1/admin/companies/{state.company_id}/roles",
+            headers={"X-Admin-Key": state.server_admin_key},
+            timeout=10,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+
+
+@app.get("/api/server/employees/{email}/check")
+def check_employee_access(email: str):
+    """
+    Compare employee's expected access (from role mapping) with actual access on server.
+    Returns any unauthorized providers (granted but not expected for their role).
+    """
+    snapshot = load_state(state.state_file)
+    emp = snapshot.get(email)
+    if not emp:
+        raise HTTPException(404, f"Employee '{email}' not found in agent state")
+
+    emp_role: str = emp.get("role", "")
+    emp_status: str = emp.get("status", "active")
+
+    # Expected providers: none if left/terminated, else from role mapping
+    expected_providers: set[str] = set()
+    if emp_status == "active":
+        ui_map = _load_ui_mappings()
+        for pattern, providers in ui_map.items():
+            if pattern.lower() == emp_role.lower():
+                expected_providers = set(providers)
+                break
+
+    # Current access from server
+    try:
+        r = http_client.get(
+            f"{_server_url()}/api/v1/users/{email}/tokens",
+            params={"company_id": state.company_id},
+            timeout=10,
+        )
+        r.raise_for_status()
+        tokens: list[dict] = r.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+
+    active_providers = {t["provider"] for t in tokens if t.get("has_access")}
+    unauthorized = active_providers - expected_providers
+
+    return {
+        "email": email,
+        "name": emp.get("name", email),
+        "role": emp_role,
+        "status": emp_status,
+        "expected_providers": sorted(expected_providers),
+        "active_providers": sorted(active_providers),
+        "unauthorized_providers": sorted(unauthorized),
+        "ok": len(unauthorized) == 0,
+    }
+
+
+@app.post("/api/server/employees/{email}/remediate")
+def remediate_employee_access(email: str):
+    """Revoke all unauthorized provider access detected by /check."""
+    if not state.server_admin_key:
+        raise HTTPException(403, "server_admin_key not configured in agent config")
+
+    check = check_employee_access(email)
+    if check["ok"]:
+        return {"message": "No unauthorized access found — nothing to do.", "results": []}
+
+    unauthorized = check["unauthorized_providers"]
+
+    try:
+        r = http_client.post(
+            f"{_server_url()}/api/v1/companies/{state.company_id}/employees/{email}/action",
+            json={
+                "action_type": "terminated",
+                "employee_name": check.get("name", email),
+                "providers_override": unauthorized,
+            },
+            headers={"X-Admin-Key": state.server_admin_key},
+            timeout=30,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Server unreachable: {exc}")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
 
 
 def _run(host: str, port: int) -> None:

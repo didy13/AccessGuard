@@ -6,6 +6,7 @@ company_name: "Test Corp"
 # URL of YOUR server that receives events
 server_url: "http://localhost:8000"
 server_api_key: ""
+server_admin_key: "secret"   # mora da odgovara ADMIN_API_KEY na serveru
 
 # Polling interval in seconds (default 900 = 15 minutes)
 poll_interval: 900

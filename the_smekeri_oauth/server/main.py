@@ -236,6 +236,7 @@ class ManualActionIn(BaseModel):
     employee_name: str = ""
     previous_role: str | None = None
     new_role: str | None = None
+    providers_override: list[str] | None = None
 
 
 @app.post(
@@ -269,7 +270,9 @@ def manual_employee_action(
     access_changes: list[ProviderAccessChange] = []
 
     if body.action_type == ActionType.TERMINATED:
-        if body.previous_role:
+        if body.providers_override is not None:
+            access_changes = [ProviderAccessChange(provider=p, action="revoke", entitlements=[]) for p in body.providers_override]
+        elif body.previous_role:
             access_changes = _changes_for_role(company_id, body.previous_role, "revoke", db)
         else:
             active = _current_access_providers(email, company_id, db)

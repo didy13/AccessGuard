@@ -56,6 +56,9 @@ class AgentConfig:
     # Path for UI-configured role mappings (managed through the agent dashboard)
     ui_mappings_file: str = ".agent_ui_role_mappings.json"
 
+    # Admin key forwarded to server for manual employee actions
+    server_admin_key: str = ""
+
     # Local dashboard web UI
     dashboard_enabled: bool = True
     dashboard_port: int = 7979
@@ -80,6 +83,7 @@ def load_config(config_path: str = "agent_config.yaml") -> AgentConfig:
         cfg.default_providers = data.get("default_providers", cfg.default_providers)
         cfg.state_file = data.get("state_file", cfg.state_file)
         cfg.ui_mappings_file = data.get("ui_mappings_file", cfg.ui_mappings_file)
+        cfg.server_admin_key = data.get("server_admin_key", cfg.server_admin_key)
         cfg.dashboard_enabled = bool(data.get("dashboard_enabled", cfg.dashboard_enabled))
         cfg.dashboard_port = int(data.get("dashboard_port", cfg.dashboard_port))
 

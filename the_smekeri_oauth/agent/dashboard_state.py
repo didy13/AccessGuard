@@ -53,6 +53,9 @@ class AgentDashboardState:
         self.scan_history: list[ScanRecord] = []
         self.state_file: str = ".agent_state.json"
         self.ui_mappings_file: str = ".agent_ui_role_mappings.json"
+        self.server_url: str = ""
+        self.server_api_key: str = ""
+        self.server_admin_key: str = ""
 
     def init(self, cfg: AgentConfig) -> None:
         with self._lock:
@@ -62,6 +65,9 @@ class AgentDashboardState:
             self.poll_interval = cfg.poll_interval
             self.state_file = cfg.state_file
             self.ui_mappings_file = getattr(cfg, "ui_mappings_file", ".agent_ui_role_mappings.json")
+            self.server_url = cfg.server_url.rstrip("/")
+            self.server_api_key = cfg.server_api_key
+            self.server_admin_key = getattr(cfg, "server_admin_key", "")
 
     def start_scan(self, is_initial_sync: bool = False) -> ScanRecord:
         record = ScanRecord(scanned_at=datetime.utcnow(), is_initial_sync=is_initial_sync)

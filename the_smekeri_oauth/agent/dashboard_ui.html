@@ -362,6 +362,7 @@
             <th>Employee</th>
             <th>Role / Position</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="employees-tbody"></tbody>
@@ -417,6 +418,93 @@
   <span id="footer-company">&#x2014;</span> &nbsp;&middot;&nbsp;
   Poll interval: <span id="footer-interval">&#x2014;</span>
 </footer>
+
+<!-- ── Employee Access Modal ──────────────────────────────── -->
+<div id="modal-access" class="modal-overlay">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-access-title">Current Access</span>
+      <button class="modal-close" onclick="closeModal('modal-access')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="modal-access-body">
+      <div class="empty-state">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-access')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Check Employee Modal ──────────────────────────────── -->
+<div id="modal-check" class="modal-overlay">
+  <div class="modal" style="width:540px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-check-title">Check Employee Access</span>
+      <button class="modal-close" onclick="closeModal('modal-check')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="modal-check-body">
+      <div class="empty-state">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-check')">Close</button>
+      <button class="btn btn-d" id="btn-remediate" style="display:none" onclick="remediateEmployee()">Revoke unauthorized</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Employee Logs Modal ────────────────────────────────── -->
+<div id="modal-emp-logs" class="modal-overlay">
+  <div class="modal" style="width:680px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-emp-logs-title">Employee Logs</span>
+      <button class="modal-close" onclick="closeModal('modal-emp-logs')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="modal-emp-logs-body" style="max-height:420px;overflow-y:auto">
+      <div class="empty-state">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-emp-logs')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Manual Action Modal ───────────────────────────────── -->
+<div id="modal-action" class="modal-overlay">
+  <div class="modal" style="width:460px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-action-title">Employee Action</span>
+      <button class="modal-close" onclick="closeModal('modal-action')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="f-act-email" />
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Action</label>
+        <select id="f-act-type" onchange="onActionTypeChange()">
+          <option value="terminated">Terminate</option>
+          <option value="role_changed">Change Role</option>
+          <option value="added">Add Access</option>
+        </select>
+      </div>
+      <div id="f-act-prev-wrap" class="form-group" style="margin-bottom:14px;display:none">
+        <label>Previous Role</label>
+        <select id="f-act-prev-role">
+          <option value="">— none —</option>
+        </select>
+      </div>
+      <div id="f-act-new-wrap" class="form-group" style="margin-bottom:14px;display:none">
+        <label>New Role</label>
+        <select id="f-act-new-role">
+          <option value="">— none —</option>
+        </select>
+      </div>
+      <div id="modal-action-result" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-action')">Cancel</button>
+      <button class="btn btn-p" onclick="submitAction()">Execute</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Add/Edit Role Mapping Modal ──────────────────────────── -->
 <div id="modal-mapping" class="modal-overlay">
@@ -877,7 +965,353 @@ function filterEmployees() {
     statusBadge.className = "badge " + (e.status === "active" ? "badge-active" : "badge-left");
     statusBadge.textContent = e.status === "active" ? "Active" : "Left";
     tdStatus.appendChild(statusBadge);
+
+    const tdAct = row.insertCell();
+    tdAct.style.cssText = "white-space:nowrap";
+    const btnDefs = [
+      { label: "Check Access", fn: () => openAccessModal(e.email, e.name) },
+      { label: "Check Employee", fn: () => openCheckModal(e.email, e.name), cls: "btn-g" },
+      { label: "Terminate", fn: () => openActionModal(e.email, e.name, "terminated", e.role), cls: "btn-d" },
+      { label: "Change Role", fn: () => openActionModal(e.email, e.name, "role_changed", e.role) },
+      { label: "Add Access", fn: () => openActionModal(e.email, e.name, "added", e.role) },
+      { label: "Logs", fn: () => openLogsModal(e.email, e.name) },
+    ];
+    btnDefs.forEach(def => {
+      const b = document.createElement("button");
+      b.className = "btn btn-g btn-sm";
+      if (def.cls) b.className = "btn " + def.cls + " btn-sm";
+      b.textContent = def.label;
+      b.style.marginRight = "4px";
+      b.addEventListener("click", def.fn);
+      tdAct.appendChild(b);
+    });
   });
+}
+
+// ── Employee access modal ─────────────────────────────────────────────────────
+
+async function openAccessModal(email, name) {
+  document.getElementById("modal-access-title").textContent = "Access — " + name;
+  const body = document.getElementById("modal-access-body");
+  body.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "empty-state";
+  loading.textContent = "Loading…";
+  body.appendChild(loading);
+  openModal("modal-access");
+
+  try {
+    const r = await fetch("/api/server/employees/" + encodeURIComponent(email) + "/tokens");
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const tokens = await r.json();
+    body.replaceChildren();
+    if (!tokens.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "No access records found on server.";
+      body.appendChild(empty);
+      return;
+    }
+    const table = document.createElement("table");
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ["Provider", "Action", "Status", "Timestamp"].forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      hrow.appendChild(th);
+    });
+    const tbody2 = table.createTBody();
+    tokens.forEach(t => {
+      const row = tbody2.insertRow();
+      row.insertCell().textContent = t.provider;
+      const tdA = row.insertCell();
+      const ab = document.createElement("span");
+      ab.className = "badge " + (t.action === "grant" ? "badge-added" : "badge-terminated");
+      ab.textContent = t.action;
+      tdA.appendChild(ab);
+      const tdS = row.insertCell();
+      const sb = document.createElement("span");
+      sb.className = "badge " + (t.has_access ? "badge-active" : "badge-left");
+      sb.textContent = t.has_access ? "Has access" : "No access";
+      tdS.appendChild(sb);
+      row.insertCell().textContent = t.timestamp ? new Date(t.timestamp + "Z").toLocaleString() : "—";
+    });
+    body.appendChild(table);
+  } catch (err) {
+    body.replaceChildren();
+    const msg = document.createElement("div");
+    msg.style.cssText = "color:var(--red);padding:12px";
+    msg.textContent = "Error: " + err.message;
+    body.appendChild(msg);
+  }
+}
+
+// ── Check employee modal ──────────────────────────────────────────────────────
+
+let lastCheckEmail = null;
+
+async function openCheckModal(email, name) {
+  lastCheckEmail = email;
+  document.getElementById("modal-check-title").textContent = "Check — " + name;
+  document.getElementById("btn-remediate").style.display = "none";
+  const body = document.getElementById("modal-check-body");
+  body.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "empty-state";
+  loading.textContent = "Checking access…";
+  body.appendChild(loading);
+  openModal("modal-check");
+
+  try {
+    const r = await fetch("/api/server/employees/" + encodeURIComponent(email) + "/check");
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const result = await r.json();
+    renderCheckResult(result);
+  } catch (err) {
+    body.replaceChildren();
+    const msg = document.createElement("div");
+    msg.style.cssText = "color:var(--red);padding:12px";
+    msg.textContent = "Error: " + err.message;
+    body.appendChild(msg);
+  }
+}
+
+function renderCheckResult(result) {
+  const body = document.getElementById("modal-check-body");
+  body.replaceChildren();
+
+  const mkRow = (label, value, color) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)";
+    const l = document.createElement("span");
+    l.style.cssText = "color:var(--muted);font-size:.8rem";
+    l.textContent = label;
+    const v = document.createElement("span");
+    v.style.cssText = "font-weight:600;font-size:.8rem" + (color ? ";color:" + color : "");
+    v.textContent = value;
+    row.appendChild(l);
+    row.appendChild(v);
+    return row;
+  };
+
+  body.appendChild(mkRow("Role", result.role || "—"));
+  body.appendChild(mkRow("Status", result.status));
+  body.appendChild(mkRow("Expected providers", result.expected_providers.join(", ") || "none"));
+  body.appendChild(mkRow("Active providers", result.active_providers.join(", ") || "none"));
+
+  const unauthorized = result.unauthorized_providers;
+  if (result.ok) {
+    const ok = document.createElement("div");
+    ok.style.cssText = "margin-top:16px;padding:10px 14px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:6px;color:var(--green);font-weight:600;font-size:.82rem";
+    ok.textContent = "No unauthorized access detected.";
+    body.appendChild(ok);
+  } else {
+    const warn = document.createElement("div");
+    warn.style.cssText = "margin-top:16px;padding:10px 14px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:6px;color:var(--red);font-weight:600;font-size:.82rem";
+    const title = document.createElement("div");
+    title.textContent = "Unauthorized providers detected:";
+    warn.appendChild(title);
+    const list = document.createElement("div");
+    list.style.marginTop = "6px";
+    unauthorized.forEach(p => {
+      const item = document.createElement("span");
+      item.className = "badge badge-terminated";
+      item.style.marginRight = "4px";
+      item.textContent = p;
+      list.appendChild(item);
+    });
+    warn.appendChild(list);
+    body.appendChild(warn);
+    document.getElementById("btn-remediate").style.display = "";
+  }
+}
+
+async function remediateEmployee() {
+  if (!lastCheckEmail) return;
+  document.getElementById("btn-remediate").textContent = "Revoking…";
+  document.getElementById("btn-remediate").disabled = true;
+  try {
+    const r = await fetch("/api/server/employees/" + encodeURIComponent(lastCheckEmail) + "/remediate", { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || r.statusText);
+    toast("Unauthorized access revoked", "ok");
+    closeModal("modal-check");
+  } catch (err) {
+    toast("Remediation failed: " + err.message, "err");
+  } finally {
+    document.getElementById("btn-remediate").textContent = "Revoke unauthorized";
+    document.getElementById("btn-remediate").disabled = false;
+  }
+}
+
+// ── Employee logs modal ───────────────────────────────────────────────────────
+
+async function openLogsModal(email, name) {
+  document.getElementById("modal-emp-logs-title").textContent = "Logs — " + name;
+  const body = document.getElementById("modal-emp-logs-body");
+  body.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "empty-state";
+  loading.textContent = "Loading…";
+  body.appendChild(loading);
+  openModal("modal-emp-logs");
+
+  try {
+    const r = await fetch("/api/server/employees/" + encodeURIComponent(email) + "/logs");
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const logs = await r.json();
+    body.replaceChildren();
+    if (!logs.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "No log entries found.";
+      body.appendChild(empty);
+      return;
+    }
+    const table = document.createElement("table");
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ["Time", "Provider", "Action", "Type", "Status", "Message"].forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      hrow.appendChild(th);
+    });
+    const tbody2 = table.createTBody();
+    logs.forEach(l => {
+      const row = tbody2.insertRow();
+      row.insertCell().textContent = l.timestamp ? new Date(l.timestamp + "Z").toLocaleString() : "—";
+      row.insertCell().textContent = l.provider;
+      const tdA = row.insertCell();
+      const ab = document.createElement("span");
+      ab.className = "badge " + (l.action === "grant" ? "badge-added" : "badge-terminated");
+      ab.textContent = l.action;
+      tdA.appendChild(ab);
+      row.insertCell().textContent = l.action_type || "—";
+      const tdS = row.insertCell();
+      const sb = document.createElement("span");
+      sb.className = "badge " + (l.success ? "badge-ok" : "badge-fail");
+      sb.textContent = l.success ? "OK" : "Failed";
+      tdS.appendChild(sb);
+      const tdMsg = row.insertCell();
+      tdMsg.style.cssText = "color:var(--muted);max-width:180px;word-break:break-word";
+      tdMsg.textContent = l.message || "—";
+    });
+    body.appendChild(table);
+  } catch (err) {
+    body.replaceChildren();
+    const msg = document.createElement("div");
+    msg.style.cssText = "color:var(--red);padding:12px";
+    msg.textContent = "Error: " + err.message;
+    body.appendChild(msg);
+  }
+}
+
+// ── Manual action modal ───────────────────────────────────────────────────────
+
+let allRoles = [];
+
+async function loadServerRoles() {
+  try {
+    const r = await fetch("/api/server/roles");
+    if (!r.ok) return;
+    const roles = await r.json();
+    allRoles = roles.map(rm => rm.role_name);
+  } catch (_) { allRoles = []; }
+}
+
+function populateRoleSelect(selectId, currentRole) {
+  const sel = document.getElementById(selectId);
+  sel.replaceChildren();
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "— none —";
+  sel.appendChild(blank);
+  const rolesSource = allRoles.length ? allRoles : (currentRole ? [currentRole] : []);
+  rolesSource.forEach(r => {
+    const opt = document.createElement("option");
+    opt.value = r;
+    opt.textContent = r;
+    sel.appendChild(opt);
+  });
+  if (currentRole) sel.value = currentRole;
+}
+
+function onActionTypeChange() {
+  const t = document.getElementById("f-act-type").value;
+  document.getElementById("f-act-prev-wrap").style.display = (t === "terminated" || t === "role_changed") ? "" : "none";
+  document.getElementById("f-act-new-wrap").style.display  = (t === "added" || t === "role_changed") ? "" : "none";
+}
+
+async function openActionModal(email, name, actionType, currentRole) {
+  document.getElementById("modal-action-title").textContent = "Action — " + name;
+  document.getElementById("f-act-email").value = email;
+  document.getElementById("f-act-type").value = actionType || "terminated";
+  document.getElementById("modal-action-result").replaceChildren();
+  await loadServerRoles();
+  populateRoleSelect("f-act-prev-role", currentRole);
+  populateRoleSelect("f-act-new-role", "");
+  onActionTypeChange();
+  openModal("modal-action");
+}
+
+async function submitAction() {
+  const email = document.getElementById("f-act-email").value;
+  const actionType = document.getElementById("f-act-type").value;
+  const prevRole = document.getElementById("f-act-prev-role").value || null;
+  const newRole  = document.getElementById("f-act-new-role").value  || null;
+
+  const resultDiv = document.getElementById("modal-action-result");
+  resultDiv.replaceChildren();
+  const spinner = document.createElement("div");
+  spinner.style.cssText = "color:var(--muted);font-size:.8rem";
+  spinner.textContent = "Processing…";
+  resultDiv.appendChild(spinner);
+
+  try {
+    const r = await fetch("/api/server/employees/" + encodeURIComponent(email) + "/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action_type: actionType, previous_role: prevRole, new_role: newRole }),
+    });
+    const data = await r.json();
+    resultDiv.replaceChildren();
+    if (!r.ok) {
+      const errMsg = document.createElement("div");
+      errMsg.style.cssText = "color:var(--red);font-size:.8rem;margin-top:8px";
+      errMsg.textContent = "Error: " + (data.detail || r.statusText);
+      resultDiv.appendChild(errMsg);
+      return;
+    }
+    const results = data.results || [];
+    results.forEach(res => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem";
+      const prov = document.createElement("span");
+      prov.style.fontWeight = "600";
+      prov.textContent = res.provider;
+      const badge = document.createElement("span");
+      badge.className = "badge " + (res.success ? "badge-ok" : "badge-fail");
+      badge.textContent = res.success ? "OK" : "Failed";
+      const msg = document.createElement("span");
+      msg.style.color = "var(--muted)";
+      msg.textContent = res.message || "";
+      row.appendChild(prov);
+      row.appendChild(badge);
+      row.appendChild(msg);
+      resultDiv.appendChild(row);
+    });
+    if (data.all_succeeded) {
+      toast("Action completed successfully");
+    } else {
+      toast("Action completed with some errors", "err");
+    }
+  } catch (err) {
+    resultDiv.replaceChildren();
+    const errMsg = document.createElement("div");
+    errMsg.style.cssText = "color:var(--red);font-size:.8rem;margin-top:8px";
+    errMsg.textContent = "Error: " + err.message;
+    resultDiv.appendChild(errMsg);
+  }
 }
 
 // ── Role Mappings ─────────────────────────────────────────────────────────────
