@@ -62,6 +62,8 @@ class RoleMapping(Base):
     role_name: Mapped[str] = mapped_column(String(200), nullable=False)
     # JSON array of provider names, e.g. '["microsoft","google"]'
     providers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    # JSON dict: provider -> {grant: [...], revoke: [...]} entitlements
+    entitlements_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
 
     company: Mapped[Company] = relationship("Company", back_populates="role_mappings")
 
@@ -72,6 +74,14 @@ class RoleMapping(Base):
     @providers.setter
     def providers(self, value: list[str]) -> None:
         self.providers_json = json.dumps(value)
+
+    @property
+    def entitlements(self) -> dict:
+        return json.loads(self.entitlements_json)
+
+    @entitlements.setter
+    def entitlements(self, value: dict) -> None:
+        self.entitlements_json = json.dumps(value)
 
 
 class AuditLog(Base):

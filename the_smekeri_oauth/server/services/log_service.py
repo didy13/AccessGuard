@@ -38,6 +38,8 @@ def get_logs(
     db: Session,
     company_id: str | None = None,
     employee_email: str | None = None,
+    action_type: str | None = None,
+    provider: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[AuditLog]:
@@ -46,6 +48,10 @@ def get_logs(
         q = q.filter(AuditLog.company_id == company_id)
     if employee_email:
         q = q.filter(AuditLog.employee_email.ilike(f"%{employee_email}%"))
+    if action_type:
+        q = q.filter(AuditLog.action_type == action_type)
+    if provider:
+        q = q.filter(AuditLog.provider == provider)
     return q.offset(offset).limit(limit).all()
 
 

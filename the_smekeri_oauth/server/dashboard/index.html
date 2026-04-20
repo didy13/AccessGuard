@@ -18,7 +18,7 @@
   .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:var(--muted);transition:all .15s}
   .nav-item:hover,.nav-item.active{background:var(--surface2);color:var(--text)}
   .main{margin-left:220px;padding:32px;min-height:100vh}
-  .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+  .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:12px}
   .page-title{font-size:22px;font-weight:700}
   .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
   .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
@@ -44,17 +44,18 @@
   label{display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase}
   input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;font-family:inherit}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
-  textarea{resize:vertical;min-height:120px}
+  textarea{resize:vertical;min-height:80px}
   .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
   .btn:hover{opacity:.85}.btn-p{background:var(--accent);color:#fff}.btn-d{background:var(--danger);color:#fff}
+  .btn-warn{background:var(--warn);color:#000}
   .btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
   .btn-sm{padding:5px 10px;font-size:12px}
-  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:flex-start;padding-top:80px}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:flex-start;padding-top:60px;overflow-y:auto}
   .modal-overlay.open{display:flex}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-width:95vw}
-  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-width:95vw;margin-bottom:40px}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
   .modal-title{font-weight:700;font-size:15px}
-  .modal-close{cursor:pointer;color:var(--muted);background:none;border:none;font-size:20px;color:inherit}
+  .modal-close{cursor:pointer;background:none;border:none;font-size:20px;color:var(--muted);flex-shrink:0}
   .modal-body{padding:20px}
   .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
   .page{display:none}.page.active{display:block}
@@ -66,6 +67,12 @@
   .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;font-size:13px;font-weight:600;z-index:200;transition:opacity .3s;min-width:240px}
   .toast.ok{border-color:var(--success);color:var(--success)}.toast.err{border-color:var(--danger);color:var(--danger)}
   select{cursor:pointer}
+  .filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .filter-bar input{width:180px}.filter-bar select{width:160px}
+  .result-detail{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 0;margin-top:12px}
+  .result-row{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 12px;border-bottom:1px solid var(--border)}
+  .result-row:last-child{border-bottom:none}
+  details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:8px 0;user-select:none}
 </style>
 </head>
 <body>
@@ -110,15 +117,25 @@
   <div id="page-logs" class="page">
     <div class="page-header">
       <div class="page-title">Audit Logs</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="logs-search" placeholder="Search employee…" style="width:200px" oninput="loadLogs()" />
+      <div class="filter-bar">
+        <input id="logs-search" placeholder="Search employee…" oninput="loadLogs()" />
         <select id="logs-filter" onchange="loadLogs()"><option value="">All Companies</option></select>
+        <select id="logs-action-filter" onchange="loadLogs()">
+          <option value="">All Actions</option>
+          <option value="added">Added</option>
+          <option value="role_changed">Role Changed</option>
+          <option value="terminated">Terminated</option>
+        </select>
+        <select id="logs-provider-filter" onchange="loadLogs()">
+          <option value="">All Providers</option>
+        </select>
+        <button class="btn btn-g btn-sm" onclick="loadLogs()">↺ Refresh</button>
       </div>
     </div>
     <div class="card">
       <div class="card-header">
         <span class="card-title">Log Entries</span>
-        <button class="btn btn-g btn-sm" onclick="loadLogs()">↺ Refresh</button>
+        <span id="logs-count" style="color:var(--muted);font-size:12px"></span>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Time</th><th>Company</th><th>Employee</th><th>Action</th><th>Provider</th><th>Op</th><th>Status</th><th>Message</th></tr></thead>
@@ -131,8 +148,8 @@
   <div id="page-users" class="page">
     <div class="page-header">
       <div class="page-title">Users</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="users-search" placeholder="Search by name or email…" style="width:220px" oninput="loadUsers()" />
+      <div class="filter-bar">
+        <input id="users-search" placeholder="Search by name or email…" oninput="loadUsers()" />
         <select id="users-filter" onchange="loadUsers()"><option value="">All Companies</option></select>
         <button class="btn btn-g btn-sm" onclick="loadUsers()">↺ Refresh</button>
       </div>
@@ -176,12 +193,12 @@
 
 </main>
 
-<!-- TOKEN CHECKER MODAL -->
+<!-- TOKEN / ACCESS CHECK MODAL -->
 <div id="modal-tokens" class="modal-overlay">
-  <div class="modal" style="width:560px">
+  <div class="modal" style="width:620px">
     <div class="modal-header">
       <div>
-        <div class="modal-title" id="tokens-modal-name">User Tokens</div>
+        <div class="modal-title" id="tokens-modal-name">Access Status</div>
         <div style="color:var(--muted);font-size:12px;margin-top:2px" id="tokens-modal-email"></div>
       </div>
       <button class="modal-close" onclick="closeModal('modal-tokens')">✕</button>
@@ -195,10 +212,50 @@
   </div>
 </div>
 
-<!-- MODALS -->
+<!-- MANUAL ACTION MODAL -->
+<div id="modal-manual-action" class="modal-overlay">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="ma-title">Manual Action</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px" id="ma-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-manual-action')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Action Type</label>
+        <select id="ma-type" onchange="onManualTypeChange()">
+          <option value="terminated">Terminated — revoke all access</option>
+          <option value="role_changed">Role Changed — revoke old, grant new</option>
+          <option value="added">Added — grant access for role</option>
+        </select>
+      </div>
+      <div class="form-group" id="ma-prev-grp">
+        <label>Previous Role</label>
+        <select id="ma-prev-role"><option value="">— select role —</option></select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">For terminated: leave blank to auto-detect from audit log</div>
+      </div>
+      <div class="form-group" id="ma-new-grp">
+        <label>New Role</label>
+        <select id="ma-new-role"><option value="">— select role —</option></select>
+      </div>
+      <div id="ma-result" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-g" onclick="closeModal('modal-manual-action')">Cancel</button>
+      <button class="btn btn-p" id="ma-btn" onclick="submitManualAction()">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPANY MODAL -->
 <div id="modal-company" class="modal-overlay">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">Add Company</span><button class="modal-close" onclick="closeModal('modal-company')">✕</button></div>
+    <div class="modal-header">
+      <span class="modal-title">Add Company</span>
+      <button class="modal-close" onclick="closeModal('modal-company')">✕</button>
+    </div>
     <div class="modal-body">
       <div class="form-group"><label>Company ID</label><input id="f-cid" placeholder="acme-corp" /></div>
       <div class="form-group"><label>Company Name</label><input id="f-cname" placeholder="Acme Corp" /></div>
@@ -211,17 +268,43 @@
   </div>
 </div>
 
+<!-- PROVIDER MODAL -->
 <div id="modal-provider" class="modal-overlay">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">Configure Provider</span><button class="modal-close" onclick="closeModal('modal-provider')">✕</button></div>
+    <div class="modal-header">
+      <span class="modal-title">Configure Provider</span>
+      <button class="modal-close" onclick="closeModal('modal-provider')">✕</button>
+    </div>
     <div class="modal-body">
       <div class="form-group">
         <label>Provider</label>
-        <select id="f-pname"><option value="microsoft">Microsoft 365</option><option value="google">Google Workspace</option></select>
+        <select id="f-pname">
+          <option value="microsoft">Microsoft 365 / Entra ID</option>
+          <option value="google">Google Workspace</option>
+          <option value="bamboohr">BambooHR</option>
+          <option value="clockify">Clockify</option>
+          <option value="zoho">Zoho / Zoho People</option>
+          <option value="jira">Jira</option>
+          <option value="hubspot">HubSpot</option>
+          <option value="salesforce">Salesforce</option>
+          <option value="sap_s4hana_cloud">SAP S/4HANA Cloud</option>
+          <option value="oracle_fusion_erp">Oracle Fusion ERP</option>
+          <option value="microsoft_dynamics_365">Microsoft Dynamics 365</option>
+          <option value="workday">Workday</option>
+          <option value="rippling">Rippling</option>
+          <option value="sage_hrms">Sage HRMS</option>
+          <option value="freshbooks">FreshBooks</option>
+          <option value="liveagent">LiveAgent</option>
+          <option value="groove">Groove</option>
+          <option value="happyfox">HappyFox</option>
+          <option value="informatika365">Informatika 365</option>
+          <option value="erpag">ERPAG</option>
+          <option value="mock">Mock (testing)</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Credentials (JSON)</label>
-        <textarea id="f-pcreds" placeholder='{"tenant_id":"…","client_id":"…","client_secret":"…"}'></textarea>
+        <textarea id="f-pcreds" style="min-height:120px" placeholder='{"tenant_id":"…","client_id":"…","client_secret":"…"}'></textarea>
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="f-penabled" checked style="width:auto" />
@@ -235,12 +318,39 @@
   </div>
 </div>
 
+<!-- ROLE MAPPING MODAL -->
 <div id="modal-role" class="modal-overlay">
-  <div class="modal">
-    <div class="modal-header"><span class="modal-title">Add Role Mapping</span><button class="modal-close" onclick="closeModal('modal-role')">✕</button></div>
+  <div class="modal" style="width:540px">
+    <div class="modal-header">
+      <span class="modal-title">Add / Edit Role Mapping</span>
+      <button class="modal-close" onclick="closeModal('modal-role')">✕</button>
+    </div>
     <div class="modal-body">
-      <div class="form-group"><label>Role / Designation</label><input id="f-rname" placeholder="CEO" /></div>
-      <div class="form-group"><label>Providers (comma-separated)</label><input id="f-rproviders" placeholder="microsoft, google" /></div>
+      <div class="form-group">
+        <label>Role / Designation</label>
+        <input id="f-rname" placeholder="e.g. CEO, Software Engineer, Finance Manager" />
+      </div>
+      <div class="form-group">
+        <label>Providers (comma-separated)</label>
+        <input id="f-rproviders" placeholder="microsoft, google, jira" />
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          Available: microsoft, google, bamboohr, clockify, zoho, jira, hubspot, salesforce, workday, rippling, sap_s4hana_cloud, oracle_fusion_erp, microsoft_dynamics_365, freshbooks, liveagent, groove, happyfox, informatika365, erpag, mock
+        </div>
+      </div>
+      <details>
+        <summary>Advanced: per-provider entitlements (optional)</summary>
+        <div style="margin-top:12px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.6">
+            Optional JSON: maps each provider to specific grant/revoke entitlements.<br>
+            Leave blank for provider-default behaviour (full session revoke / user verification grant).
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Entitlements JSON</label>
+            <textarea id="f-rentitlements" style="min-height:100px;font-family:monospace;font-size:12px"
+              placeholder='{"microsoft":{"grant":[{"type":"aad_group","group_id":"xxx"}],"revoke":[]},"google":{"grant":[{"type":"workspace_group","email":"eng@co.com"}],"revoke":[]}}'></textarea>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="modal-footer">
       <button class="btn btn-g" onclick="closeModal('modal-role')">Cancel</button>
@@ -252,163 +362,146 @@
 <script>
 'use strict';
 
-// ── Config ────────────────────────────────────────────────────
 const API = '';
 let ADMIN_KEY = (localStorage.getItem('adminKey') || '').trim();
 let selectedCompany = null;
 
-function promptForAdminKey(message) {
-  const k = prompt(message || 'Enter Admin API key (same value as ADMIN_API_KEY in server .env):');
+function promptForAdminKey(msg) {
+  const k = prompt(msg || 'Enter Admin API key (must match ADMIN_API_KEY in server .env):');
   const t = (k || '').trim();
-  if (t) {
-    ADMIN_KEY = t;
-    localStorage.setItem('adminKey', ADMIN_KEY);
-    return true;
-  }
+  if (t) { ADMIN_KEY = t; localStorage.setItem('adminKey', ADMIN_KEY); return true; }
   return false;
 }
-
-if (!ADMIN_KEY) {
-  promptForAdminKey(
-    'Enter Admin API key — must match ADMIN_API_KEY in your server .env (e.g. change-me-strong-admin-key).'
-  );
-}
+if (!ADMIN_KEY) promptForAdminKey();
 
 function clearAdminKey() {
-  if (!confirm('Clear saved admin key and reload the page?')) return;
+  if (!confirm('Clear saved admin key and reload?')) return;
   localStorage.removeItem('adminKey');
   location.reload();
-}
-
-// ── HTML escaping (prevent XSS when inserting text into DOM) ──
-function esc(str) {
-  const d = document.createElement('div');
-  d.textContent = String(str ?? '');
-  return d.innerHTML;
 }
 
 // ── Fetch helpers ─────────────────────────────────────────────
 function adminHeaders() {
   return { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY };
 }
-
 async function api(path, opts = {}) {
   const { headers: extraH, ...rest } = opts;
-  const doFetch = () =>
-    fetch(API + path, { ...rest, headers: { ...adminHeaders(), ...(extraH || {}) } });
-
+  const doFetch = () => fetch(API + path, { ...rest, headers: { ...adminHeaders(), ...(extraH || {}) } });
   let res = await doFetch();
   if (res.status === 403) {
-    localStorage.removeItem('adminKey');
-    ADMIN_KEY = '';
-    toast('Invalid admin key — enter the same value as ADMIN_API_KEY in server .env', 'err');
-    if (promptForAdminKey('That key was rejected. Re-enter Admin API key (ADMIN_API_KEY from .env):')) {
-      res = await doFetch();
-    }
+    localStorage.removeItem('adminKey'); ADMIN_KEY = '';
+    toast('Invalid admin key', 'err');
+    if (promptForAdminKey('Re-enter Admin API key:')) res = await doFetch();
   }
   if (!res.ok) throw new Error(await res.text() || res.statusText);
   if (res.status === 204) return null;
   return res.json();
 }
-
 async function publicApi(path) {
   const res = await fetch(API + path);
   if (!res.ok) throw new Error(res.statusText);
   return res.json();
 }
 
-// ── Toast ─────────────────────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = String(msg);          // textContent — no XSS
+  el.className = 'toast ' + type;
+  el.textContent = String(msg);
   document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
 }
 
-// ── Formatters ────────────────────────────────────────────────
+// ── DOM helpers ────────────────────────────────────────────────
 function fmtDate(ts) { return new Date(ts).toLocaleString(); }
 
-function actionBadge(action) {
-  const cls  = { terminated: 'b-err', role_changed: 'b-warn', added: 'b-ok' };
-  const lbl  = { terminated: '✕ Terminated', role_changed: '↺ Role Changed', added: '+ Added' };
-  return `<span class="badge ${cls[action] || 'b-muted'}">${esc(lbl[action] || action)}</span>`;
+function mkBadge(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'badge ' + cls;
+  s.textContent = text;
+  return s;
 }
 
-function statusBadge(ok) {
-  return ok
-    ? '<span class="badge b-ok"><span class="dot"></span> Success</span>'
-    : '<span class="badge b-err"><span class="dot"></span> Failed</span>';
+function mkBadgeWithDot(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'badge ' + cls;
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  s.appendChild(dot);
+  s.appendChild(document.createTextNode(' ' + text));
+  return s;
 }
 
-// ── Build table rows safely ───────────────────────────────────
-function logRow(l, withMessage) {
-  const tr = document.createElement('tr');
+function actionBadgeEl(action) {
+  const map = { terminated: ['b-err', '✕ Terminated'], role_changed: ['b-warn', '↺ Role Changed'], added: ['b-ok', '+ Added'] };
+  const [cls, lbl] = map[action] || ['b-muted', action];
+  return mkBadge(lbl, cls);
+}
 
-  function td(content, muted, nowrap) {
-    const el = document.createElement('td');
-    if (muted) el.style.color = 'var(--muted)';
-    if (nowrap) el.style.whiteSpace = 'nowrap';
-    if (typeof content === 'string' && content.startsWith('<')) {
-      // pre-built safe HTML for badges only
-      el.innerHTML = content;
-    } else {
-      el.textContent = content;
-    }
-    return el;
-  }
-
-  // Time
-  const time = document.createElement('td');
-  time.style.cssText = 'white-space:nowrap;color:var(--muted);font-size:12px';
-  time.textContent = fmtDate(l.timestamp);
-  tr.appendChild(time);
-
-  // Company tag
-  const compTd = document.createElement('td');
-  const tag = document.createElement('span');
-  tag.className = 'tag';
-  tag.textContent = l.company_id;
-  compTd.appendChild(tag);
-  tr.appendChild(compTd);
-
-  // Employee
-  const empTd = document.createElement('td');
-  const nameDiv = document.createElement('div');
-  nameDiv.textContent = l.employee_name;
-  const emailDiv = document.createElement('div');
-  emailDiv.style.cssText = 'color:var(--muted);font-size:11px';
-  emailDiv.textContent = l.employee_email;
-  empTd.appendChild(nameDiv);
-  empTd.appendChild(emailDiv);
-  tr.appendChild(empTd);
-
-  tr.appendChild(td(actionBadge(l.action_type)));
-  tr.appendChild(td(`<span class="badge b-info">${esc(l.provider)}</span>`));
-  tr.appendChild(td(`<span class="badge b-muted">${esc(l.action)}</span>`));
-  tr.appendChild(td(statusBadge(l.success)));
-
-  if (withMessage) {
-    const msgTd = document.createElement('td');
-    msgTd.style.cssText = 'max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px';
-    msgTd.textContent = l.message;
-    tr.appendChild(msgTd);
-  }
-
-  return tr;
+function statusBadgeEl(ok) {
+  return mkBadgeWithDot(ok ? 'Success' : 'Failed', ok ? 'b-ok' : 'b-err');
 }
 
 function emptyRow(cols, msg) {
   const tr = document.createElement('tr');
   const td = document.createElement('td');
-  td.colSpan = cols;
-  td.className = 'empty';
-  td.textContent = msg;
-  tr.appendChild(td);
+  td.colSpan = cols; td.className = 'empty'; td.textContent = msg;
+  tr.appendChild(td); return tr;
+}
+
+// ── Log row ────────────────────────────────────────────────────
+function logRow(l, withMessage) {
+  const tr = document.createElement('tr');
+
+  function appendTd(content, style) {
+    const td = document.createElement('td');
+    if (style) td.style.cssText = style;
+    if (content instanceof Node) td.appendChild(content);
+    else td.textContent = content;
+    tr.appendChild(td);
+  }
+
+  appendTd(fmtDate(l.timestamp), 'white-space:nowrap;color:var(--muted);font-size:12px');
+
+  const compTd = document.createElement('td');
+  compTd.appendChild(mkBadge(l.company_id, 'b-muted'));
+  tr.appendChild(compTd);
+
+  const empTd = document.createElement('td');
+  const nameDiv = document.createElement('div'); nameDiv.textContent = l.employee_name;
+  const emailDiv = document.createElement('div');
+  emailDiv.style.cssText = 'color:var(--muted);font-size:11px';
+  emailDiv.textContent = l.employee_email;
+  empTd.appendChild(nameDiv); empTd.appendChild(emailDiv);
+  tr.appendChild(empTd);
+
+  const actionTd = document.createElement('td');
+  actionTd.appendChild(actionBadgeEl(l.action_type));
+  tr.appendChild(actionTd);
+
+  const provTd = document.createElement('td');
+  provTd.appendChild(mkBadge(l.provider, 'b-info'));
+  tr.appendChild(provTd);
+
+  const opTd = document.createElement('td');
+  opTd.appendChild(mkBadge(l.action, 'b-muted'));
+  tr.appendChild(opTd);
+
+  const statusTd = document.createElement('td');
+  statusTd.appendChild(statusBadgeEl(l.success));
+  tr.appendChild(statusTd);
+
+  if (withMessage) {
+    const msgTd = document.createElement('td');
+    msgTd.style.cssText = 'max-width:260px;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px';
+    msgTd.title = l.message;
+    msgTd.textContent = l.message;
+    tr.appendChild(msgTd);
+  }
   return tr;
 }
 
-// ── Navigation ────────────────────────────────────────────────
+// ── Navigation ─────────────────────────────────────────────────
 function showPage(el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -424,36 +517,32 @@ function showPage(el) {
 function showTab(tabId, el) {
   document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['tab-providers', 'tab-roles'].forEach(id => {
+  ['tab-providers','tab-roles'].forEach(id => {
     document.getElementById(id).style.display = id === tabId ? '' : 'none';
   });
   if (tabId === 'tab-providers') loadProviders();
   if (tabId === 'tab-roles') loadRoles();
 }
 
-// ── Populate company selects ──────────────────────────────────
 function populateSelects(companies) {
-  ['dash-filter', 'logs-filter', 'users-filter'].forEach(id => {
+  ['dash-filter','logs-filter','users-filter'].forEach(id => {
     const sel = document.getElementById(id);
     const val = sel.value;
-    // Remove all options except the first ("All Companies")
     while (sel.options.length > 1) sel.remove(1);
     companies.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c.company_id;
-      opt.textContent = c.company_name;
+      opt.value = c.company_id; opt.textContent = c.company_name;
       sel.appendChild(opt);
     });
     sel.value = val;
   });
 }
 
-// ── Dashboard ─────────────────────────────────────────────────
+// ── Dashboard ──────────────────────────────────────────────────
 async function loadDashboard() {
   const company = document.getElementById('dash-filter').value;
-  const qs = company ? `?company_id=${encodeURIComponent(company)}` : '';
-  const logQs = company ? `?limit=20&company_id=${encodeURIComponent(company)}` : '?limit=20';
-
+  const qs = company ? '?company_id=' + encodeURIComponent(company) : '';
+  const logQs = company ? '?limit=20&company_id=' + encodeURIComponent(company) : '?limit=20';
   try {
     const [stats, logs] = await Promise.all([
       publicApi('/api/v1/logs/stats' + qs),
@@ -462,7 +551,6 @@ async function loadDashboard() {
     document.getElementById('s-total').textContent = stats.total;
     document.getElementById('s-ok').textContent = stats.succeeded;
     document.getElementById('s-fail').textContent = stats.failed;
-
     const tbody = document.getElementById('dash-tbody');
     tbody.replaceChildren();
     if (!logs.length) { tbody.appendChild(emptyRow(7, 'No events yet')); return; }
@@ -470,15 +558,36 @@ async function loadDashboard() {
   } catch (e) { toast('Dashboard error: ' + e.message, 'err'); }
 }
 
-// ── Logs ──────────────────────────────────────────────────────
+// ── Logs ───────────────────────────────────────────────────────
 async function loadLogs() {
-  const company = document.getElementById('logs-filter').value;
-  const search  = (document.getElementById('logs-search').value || '').trim();
-  const params  = new URLSearchParams({ limit: '200' });
-  if (company) params.set('company_id', company);
-  if (search)  params.set('employee_email', search);
+  const company    = document.getElementById('logs-filter').value;
+  const search     = (document.getElementById('logs-search').value || '').trim();
+  const actionType = document.getElementById('logs-action-filter').value;
+  const provider   = document.getElementById('logs-provider-filter').value;
+  const params = new URLSearchParams({ limit: '200' });
+  if (company)    params.set('company_id', company);
+  if (search)     params.set('employee_email', search);
+  if (actionType) params.set('action_type', actionType);
+  if (provider)   params.set('provider', provider);
   try {
     const logs = await publicApi('/api/v1/logs?' + params.toString());
+
+    // refresh provider filter without resetting selection
+    const provSel = document.getElementById('logs-provider-filter');
+    const curProv = provSel.value;
+    while (provSel.options.length > 1) provSel.remove(1);
+    const seen = new Set();
+    logs.forEach(l => {
+      if (l.provider && !seen.has(l.provider)) {
+        seen.add(l.provider);
+        const o = document.createElement('option');
+        o.value = l.provider; o.textContent = l.provider;
+        provSel.appendChild(o);
+      }
+    });
+    if (seen.has(curProv)) provSel.value = curProv;
+
+    document.getElementById('logs-count').textContent = logs.length + ' entries';
     const tbody = document.getElementById('logs-tbody');
     tbody.replaceChildren();
     if (!logs.length) { tbody.appendChild(emptyRow(8, 'No logs found')); return; }
@@ -508,20 +617,15 @@ function userRow(u) {
 
   const empTd = document.createElement('td');
   const nameDiv = document.createElement('div');
-  nameDiv.style.fontWeight = '500';
-  nameDiv.textContent = u.name;
+  nameDiv.style.fontWeight = '500'; nameDiv.textContent = u.name;
   const emailDiv = document.createElement('div');
   emailDiv.style.cssText = 'color:var(--muted);font-size:11px;margin-top:2px';
   emailDiv.textContent = u.email;
-  empTd.appendChild(nameDiv);
-  empTd.appendChild(emailDiv);
+  empTd.appendChild(nameDiv); empTd.appendChild(emailDiv);
   tr.appendChild(empTd);
 
   const compTd = document.createElement('td');
-  const tag = document.createElement('span');
-  tag.className = 'tag';
-  tag.textContent = u.company_id;
-  compTd.appendChild(tag);
+  compTd.appendChild(mkBadge(u.company_id, 'b-muted'));
   tr.appendChild(compTd);
 
   const lastTd = document.createElement('td');
@@ -530,72 +634,57 @@ function userRow(u) {
   tr.appendChild(lastTd);
 
   const actTd = document.createElement('td');
-  actTd.style.cssText = 'display:flex;gap:6px;align-items:center;padding:12px';
+  actTd.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:10px 12px';
 
-  const tokenBtn = document.createElement('button');
-  tokenBtn.className = 'btn btn-g btn-sm';
-  tokenBtn.textContent = '🔑 Check Tokens';
-  tokenBtn.onclick = () => openTokensModal(u.email, u.name, u.company_id);
+  function mkBtn(label, cls, fn) {
+    const b = document.createElement('button');
+    b.className = 'btn ' + cls + ' btn-sm'; b.textContent = label; b.onclick = fn; return b;
+  }
 
-  const logsBtn = document.createElement('button');
-  logsBtn.className = 'btn btn-g btn-sm';
-  logsBtn.textContent = '📄 Logs';
-  logsBtn.onclick = () => {
+  actTd.appendChild(mkBtn('🔑 Check Access', 'btn-g', () => openTokensModal(u.email, u.name, u.company_id)));
+  actTd.appendChild(mkBtn('↺ Change Role',   'btn-g', () => openManualActionModal(u.email, u.name, u.company_id, 'role_changed')));
+  actTd.appendChild(mkBtn('+ Add Access',    'btn-g', () => openManualActionModal(u.email, u.name, u.company_id, 'added')));
+  actTd.appendChild(mkBtn('✕ Terminate',     'btn-d', () => openManualActionModal(u.email, u.name, u.company_id, 'terminated')));
+  actTd.appendChild(mkBtn('📄 Logs', 'btn-g', () => {
     document.getElementById('logs-search').value = u.email;
     document.getElementById('logs-filter').value = u.company_id;
     showPage(document.querySelector('[data-page="logs"]'));
-  };
+  }));
 
-  actTd.appendChild(tokenBtn);
-  actTd.appendChild(logsBtn);
   tr.appendChild(actTd);
   return tr;
 }
 
-function makeAccessBadge(hasAccess) {
-  const span = document.createElement('span');
-  span.className = 'badge ' + (hasAccess ? 'b-ok' : 'b-err');
-  const dot = document.createElement('span');
-  dot.className = 'dot';
-  span.appendChild(dot);
-  span.appendChild(document.createTextNode(hasAccess ? ' Active' : ' Revoked / None'));
-  return span;
-}
-
+// ── Access Check Modal ─────────────────────────────────────────
 async function openTokensModal(email, name, companyId) {
   document.getElementById('tokens-modal-name').textContent = name;
   document.getElementById('tokens-modal-email').textContent = email;
   const body = document.getElementById('tokens-modal-body');
+  body.replaceChildren();
   const loading = document.createElement('div');
-  loading.className = 'empty';
-  loading.style.padding = '40px';
-  loading.textContent = 'Loading…';
-  body.replaceChildren(loading);
+  loading.className = 'empty'; loading.style.padding = '40px'; loading.textContent = 'Loading…';
+  body.appendChild(loading);
   document.getElementById('modal-tokens').classList.add('open');
 
   try {
     const params = new URLSearchParams();
     if (companyId) params.set('company_id', companyId);
-    const tokens = await publicApi(`/api/v1/users/${encodeURIComponent(email)}/tokens?${params.toString()}`);
+    const tokens = await publicApi('/api/v1/users/' + encodeURIComponent(email) + '/tokens?' + params);
     body.replaceChildren();
 
     if (!tokens.length) {
       const el = document.createElement('div');
-      el.className = 'empty';
-      el.style.padding = '40px';
-      el.textContent = 'No token history found for this user.';
-      body.appendChild(el);
-      return;
+      el.className = 'empty'; el.style.padding = '40px';
+      el.textContent = 'No access history found for this user.';
+      body.appendChild(el); return;
     }
 
     const table = document.createElement('table');
     table.style.width = '100%';
     const thead = table.createTHead();
     const hrow = thead.insertRow();
-    ['Provider', 'Access', 'Last Action', 'Timestamp', 'Message'].forEach(t => {
-      const th = document.createElement('th');
-      th.textContent = t;
-      hrow.appendChild(th);
+    ['Provider','Access','Last Action','Timestamp','Message'].forEach(t => {
+      const th = document.createElement('th'); th.textContent = t; hrow.appendChild(th);
     });
     const tbody = table.createTBody();
 
@@ -603,39 +692,147 @@ async function openTokensModal(email, name, companyId) {
       const row = tbody.insertRow();
 
       const provTd = row.insertCell();
-      const provBadge = document.createElement('span');
-      provBadge.className = 'badge b-info';
-      provBadge.textContent = t.provider;
-      provTd.appendChild(provBadge);
+      provTd.appendChild(mkBadge(t.provider, 'b-info'));
 
-      row.insertCell().appendChild(makeAccessBadge(t.has_access));
+      const accTd = row.insertCell();
+      accTd.appendChild(mkBadgeWithDot(t.has_access ? 'Active' : 'Revoked / None', t.has_access ? 'b-ok' : 'b-err'));
 
       const actionTd = row.insertCell();
-      const actionSpan = document.createElement('span');
-      actionSpan.className = 'badge b-muted';
-      actionSpan.textContent = `${t.action_type} → ${t.action}`;
-      actionTd.appendChild(actionSpan);
+      actionTd.appendChild(mkBadge((t.action_type || '') + ' → ' + (t.action || ''), 'b-muted'));
 
       const timeTd = row.insertCell();
       timeTd.style.cssText = 'color:var(--muted);font-size:12px;white-space:nowrap';
       timeTd.textContent = t.timestamp ? fmtDate(t.timestamp) : '—';
 
       const msgTd = row.insertCell();
-      msgTd.style.cssText = 'color:var(--muted);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis';
+      msgTd.style.cssText = 'color:var(--muted);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis';
+      msgTd.title = t.message || '';
       msgTd.textContent = t.message || '—';
     });
 
     body.appendChild(table);
   } catch (e) {
+    body.replaceChildren();
     const errDiv = document.createElement('div');
-    errDiv.className = 'empty';
-    errDiv.style.cssText = 'padding:40px;color:var(--danger)';
+    errDiv.className = 'empty'; errDiv.style.cssText = 'padding:40px;color:var(--danger)';
     errDiv.textContent = 'Error: ' + e.message;
-    body.replaceChildren(errDiv);
+    body.appendChild(errDiv);
   }
 }
 
-// ── Companies ─────────────────────────────────────────────────
+// ── Manual Action ──────────────────────────────────────────────
+let maEmail = null, maName = null, maCompany = null;
+
+async function openManualActionModal(email, name, companyId, defaultAction) {
+  maEmail = email; maName = name; maCompany = companyId;
+  document.getElementById('ma-title').textContent = 'Manual Action';
+  document.getElementById('ma-sub').textContent = name + '  ·  ' + email;
+  document.getElementById('ma-type').value = defaultAction || 'terminated';
+  document.getElementById('ma-result').style.display = 'none';
+  document.getElementById('ma-result').replaceChildren();
+
+  try {
+    const roles = await api('/api/v1/admin/companies/' + encodeURIComponent(companyId) + '/roles');
+    ['ma-prev-role','ma-new-role'].forEach(id => {
+      const sel = document.getElementById(id);
+      sel.replaceChildren();
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '— select role —';
+      sel.appendChild(blank);
+      roles.forEach(r => {
+        const o = document.createElement('option');
+        o.value = r.role_name; o.textContent = r.role_name;
+        sel.appendChild(o);
+      });
+    });
+  } catch { /* no role mappings yet */ }
+
+  onManualTypeChange();
+  document.getElementById('modal-manual-action').classList.add('open');
+}
+
+function onManualTypeChange() {
+  const t = document.getElementById('ma-type').value;
+  document.getElementById('ma-prev-grp').style.display = (t === 'role_changed' || t === 'terminated') ? '' : 'none';
+  document.getElementById('ma-new-grp').style.display  = (t === 'role_changed' || t === 'added') ? '' : 'none';
+  const btn = document.getElementById('ma-btn');
+  if (t === 'terminated') { btn.className = 'btn btn-d'; btn.textContent = '✕ Terminate'; }
+  else if (t === 'role_changed') { btn.className = 'btn btn-warn'; btn.textContent = '↺ Change Role'; }
+  else { btn.className = 'btn btn-p'; btn.textContent = '+ Grant Access'; }
+}
+
+async function submitManualAction() {
+  const actionType = document.getElementById('ma-type').value;
+  const prevRole   = document.getElementById('ma-prev-role').value || null;
+  const newRole    = document.getElementById('ma-new-role').value  || null;
+
+  if (actionType === 'role_changed' && (!prevRole || !newRole)) {
+    toast('Select both previous and new role', 'err'); return;
+  }
+  if (actionType === 'added' && !newRole) {
+    toast('Select a role to grant access for', 'err'); return;
+  }
+
+  const btn = document.getElementById('ma-btn');
+  const origText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Processing…';
+
+  try {
+    const result = await api(
+      '/api/v1/companies/' + encodeURIComponent(maCompany) + '/employees/' + encodeURIComponent(maEmail) + '/action',
+      { method: 'POST', body: JSON.stringify({ action_type: actionType, previous_role: prevRole, new_role: newRole }) }
+    );
+
+    const resDiv = document.getElementById('ma-result');
+    resDiv.replaceChildren();
+    resDiv.style.display = '';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'font-weight:600;margin-bottom:8px;font-size:13px;color:' +
+      (result.all_succeeded ? 'var(--success)' : 'var(--warn)');
+    header.textContent = result.all_succeeded
+      ? '✓ ' + result.results.length + ' provider(s) processed successfully'
+      : '⚠ ' + result.results.length + ' provider(s) — some failed';
+    resDiv.appendChild(header);
+
+    const detail = document.createElement('div');
+    detail.className = 'result-detail';
+    result.results.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'result-row';
+
+      const left = document.createElement('div');
+      left.style.cssText = 'display:flex;align-items:center;gap:8px';
+      left.appendChild(mkBadge(r.provider, 'b-info'));
+      const opEl = document.createElement('span');
+      opEl.style.cssText = 'color:var(--muted);font-size:12px';
+      opEl.textContent = r.action;
+      left.appendChild(opEl);
+
+      const right = document.createElement('div');
+      right.style.cssText = 'text-align:right;font-size:12px;max-width:240px';
+      right.appendChild(statusBadgeEl(r.success));
+      if (r.message) {
+        const msg = document.createElement('div');
+        msg.style.cssText = 'color:var(--muted);margin-top:3px;font-size:11px';
+        msg.textContent = r.message;
+        right.appendChild(msg);
+      }
+      row.appendChild(left); row.appendChild(right);
+      detail.appendChild(row);
+    });
+    resDiv.appendChild(detail);
+
+    toast(result.all_succeeded ? 'Action completed' : 'Action completed with errors', result.all_succeeded ? 'ok' : 'err');
+    loadUsers();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+
+// ── Companies ──────────────────────────────────────────────────
 async function loadCompanies() {
   try {
     const companies = await api('/api/v1/admin/companies');
@@ -645,62 +842,46 @@ async function loadCompanies() {
 
     if (!companies.length) {
       const p = document.createElement('div');
-      p.className = 'empty';
-      p.textContent = 'No companies yet. Click "+ Add Company" to get started.';
-      container.appendChild(p);
-      return;
+      p.className = 'empty'; p.textContent = 'No companies yet. Click "+ Add Company" to get started.';
+      container.appendChild(p); return;
     }
 
     companies.forEach(c => {
       const card = document.createElement('div');
-      card.className = 'card';
-      card.style.marginBottom = '12px';
+      card.className = 'card'; card.style.marginBottom = '12px';
 
       const header = document.createElement('div');
-      header.className = 'card-header';
-      header.style.cursor = 'pointer';
+      header.className = 'card-header'; header.style.cursor = 'pointer';
 
       const info = document.createElement('div');
       const nameEl = document.createElement('div');
-      nameEl.style.fontWeight = '700';
-      nameEl.textContent = c.company_name;
+      nameEl.style.fontWeight = '700'; nameEl.textContent = c.company_name;
       const idEl = document.createElement('div');
       idEl.style.cssText = 'color:var(--muted);font-size:12px;margin-top:2px';
-      const tagEl = document.createElement('span');
-      tagEl.className = 'tag';
-      tagEl.textContent = c.company_id;
-      idEl.appendChild(tagEl);
-      info.appendChild(nameEl);
-      info.appendChild(idEl);
+      idEl.appendChild(mkBadge(c.company_id, 'b-muted'));
+      info.appendChild(nameEl); info.appendChild(idEl);
 
       const actions = document.createElement('div');
       actions.style.cssText = 'display:flex;align-items:center;gap:8px';
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + (c.enabled ? 'b-ok' : 'b-muted');
-      badge.textContent = c.enabled ? 'Active' : 'Disabled';
+      actions.appendChild(mkBadge(c.enabled ? 'Active' : 'Disabled', c.enabled ? 'b-ok' : 'b-muted'));
       const delBtn = document.createElement('button');
-      delBtn.className = 'btn btn-d btn-sm';
-      delBtn.textContent = 'Delete';
-      delBtn.onclick = (e) => { e.stopPropagation(); deleteCompany(c.company_id, c.company_name); };
-      actions.appendChild(badge);
+      delBtn.className = 'btn btn-d btn-sm'; delBtn.textContent = 'Delete';
+      delBtn.onclick = e => { e.stopPropagation(); deleteCompany(c.company_id, c.company_name); };
       actions.appendChild(delBtn);
 
-      header.appendChild(info);
-      header.appendChild(actions);
+      header.appendChild(info); header.appendChild(actions);
       header.onclick = () => selectCompany(c.company_id);
 
       const body = document.createElement('div');
       body.className = 'card-body';
       body.style.cssText = 'display:flex;gap:16px;color:var(--muted);font-size:12px';
       const p1 = document.createElement('span');
-      p1.textContent = `${c.providers.length} provider(s) configured`;
+      p1.textContent = c.providers.length + ' provider(s) configured';
       const p2 = document.createElement('span');
-      p2.textContent = `Created: ${fmtDate(c.created_at)}`;
-      body.appendChild(p1);
-      body.appendChild(p2);
+      p2.textContent = 'Created: ' + fmtDate(c.created_at);
+      body.appendChild(p1); body.appendChild(p2);
 
-      card.appendChild(header);
-      card.appendChild(body);
+      card.appendChild(header); card.appendChild(body);
       container.appendChild(card);
     });
   } catch (e) { toast('Companies error: ' + e.message, 'err'); }
@@ -709,19 +890,19 @@ async function loadCompanies() {
 async function selectCompany(id) {
   selectedCompany = id;
   document.getElementById('company-detail').style.display = '';
-  document.getElementById('lbl-providers').textContent = `Providers — ${id}`;
-  document.getElementById('lbl-roles').textContent = `Role Mappings — ${id}`;
+  document.getElementById('lbl-providers').textContent = 'Providers — ' + id;
+  document.getElementById('lbl-roles').textContent = 'Role Mappings — ' + id;
   document.getElementById('tab-providers').style.display = '';
   document.getElementById('tab-roles').style.display = 'none';
-  document.querySelectorAll('.tab')[0].classList.add('active');
-  document.querySelectorAll('.tab')[1].classList.remove('active');
+  document.querySelectorAll('.tabs .tab')[0].classList.add('active');
+  document.querySelectorAll('.tabs .tab')[1].classList.remove('active');
   loadProviders();
 }
 
 async function deleteCompany(id, name) {
-  if (!confirm(`Delete company "${name}" (${id})?\nThis will permanently delete all associated data.`)) return;
+  if (!confirm('Delete company "' + name + '" (' + id + ')?\nThis will permanently delete all data.')) return;
   try {
-    await api(`/api/v1/admin/companies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await api('/api/v1/admin/companies/' + encodeURIComponent(id), { method: 'DELETE' });
     toast('Company deleted');
     document.getElementById('company-detail').style.display = 'none';
     selectedCompany = null;
@@ -729,81 +910,70 @@ async function deleteCompany(id, name) {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-// ── Providers ─────────────────────────────────────────────────
+// ── Providers ──────────────────────────────────────────────────
 async function loadProviders() {
   if (!selectedCompany) return;
   try {
-    const providers = await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers`);
+    const providers = await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/providers');
     const container = document.getElementById('provider-list');
     container.replaceChildren();
 
     if (!providers.length) {
       const el = document.createElement('div');
-      el.className = 'empty';
-      el.textContent = 'No providers configured';
-      container.appendChild(el);
-      return;
+      el.className = 'empty'; el.textContent = 'No providers configured yet';
+      container.appendChild(el); return;
     }
 
     providers.forEach(p => {
       const card = document.createElement('div');
-      card.className = 'card';
-      card.style.marginBottom = '10px';
+      card.className = 'card'; card.style.marginBottom = '10px';
 
       const hdr = document.createElement('div');
       hdr.className = 'card-header';
       const nameEl = document.createElement('div');
-      nameEl.style.fontWeight = '600';
-      nameEl.textContent = p.provider_name;
+      nameEl.style.fontWeight = '600'; nameEl.textContent = p.provider_name;
       const right = document.createElement('div');
       right.style.cssText = 'display:flex;gap:8px;align-items:center';
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + (p.enabled ? 'b-ok' : 'b-muted');
-      badge.textContent = p.enabled ? 'Enabled' : 'Disabled';
+      right.appendChild(mkBadge(p.enabled ? 'Enabled' : 'Disabled', p.enabled ? 'b-ok' : 'b-muted'));
       const btn = document.createElement('button');
-      btn.className = 'btn btn-d btn-sm';
-      btn.textContent = 'Remove';
+      btn.className = 'btn btn-d btn-sm'; btn.textContent = 'Remove';
       btn.onclick = () => deleteProvider(p.provider_name);
-      right.appendChild(badge);
       right.appendChild(btn);
-      hdr.appendChild(nameEl);
-      hdr.appendChild(right);
+      hdr.appendChild(nameEl); hdr.appendChild(right);
 
       const body = document.createElement('div');
       body.className = 'card-body';
       body.style.cssText = 'color:var(--muted);font-size:12px';
-      body.textContent = `Last updated: ${fmtDate(p.updated_at)}`;
+      body.textContent = 'Last updated: ' + fmtDate(p.updated_at);
 
-      card.appendChild(hdr);
-      card.appendChild(body);
+      card.appendChild(hdr); card.appendChild(body);
       container.appendChild(card);
     });
   } catch (e) { toast(e.message, 'err'); }
 }
 
 async function deleteProvider(name) {
-  if (!confirm(`Remove provider "${name}"?`)) return;
+  if (!confirm('Remove provider "' + name + '"?')) return;
   try {
-    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/providers/' + encodeURIComponent(name), { method: 'DELETE' });
     toast('Provider removed');
     loadProviders();
   } catch (e) { toast(e.message, 'err'); }
 }
 
-// ── Roles ─────────────────────────────────────────────────────
+// ── Role Mappings ──────────────────────────────────────────────
 async function loadRoles() {
   if (!selectedCompany) return;
   try {
-    const roles = await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles`);
+    const roles = await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/roles');
     const container = document.getElementById('role-list');
     container.replaceChildren();
 
     if (!roles.length) {
       const el = document.createElement('div');
       el.className = 'empty';
-      el.textContent = 'No role mappings configured';
-      container.appendChild(el);
-      return;
+      el.textContent = 'No role mappings yet. Click "+ Add Role" to define which SaaS apps each role should access.';
+      container.appendChild(el); return;
     }
 
     const card = document.createElement('div');
@@ -811,31 +981,39 @@ async function loadRoles() {
     const table = document.createElement('table');
     const thead = table.createTHead();
     const hrow = thead.insertRow();
-    ['Role / Designation', 'Providers', ''].forEach(t => {
-      const th = document.createElement('th');
-      th.textContent = t;
-      hrow.appendChild(th);
+    ['Role / Designation','Providers','Entitlements',''].forEach(t => {
+      const th = document.createElement('th'); th.textContent = t; hrow.appendChild(th);
     });
     const tbody = table.createTBody();
 
     roles.forEach(r => {
       const row = tbody.insertRow();
+
       const nameTd = row.insertCell();
-      nameTd.innerHTML = `<strong>${esc(r.role_name)}</strong>`;
+      const strong = document.createElement('strong');
+      strong.textContent = r.role_name;
+      nameTd.appendChild(strong);
+
       const provTd = row.insertCell();
       provTd.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;padding:12px';
-      r.providers.forEach(p => {
-        const badge = document.createElement('span');
-        badge.className = 'badge b-info';
-        badge.textContent = p;
-        provTd.appendChild(badge);
-      });
+      r.providers.forEach(p => provTd.appendChild(mkBadge(p, 'b-info')));
+
+      const entTd = row.insertCell();
+      const hasEnts = r.entitlements && Object.keys(r.entitlements).length > 0;
+      entTd.appendChild(mkBadge(hasEnts ? '✓ Configured' : 'Default', hasEnts ? 'b-ok' : 'b-muted'));
+
       const actTd = row.insertCell();
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-d btn-sm';
-      btn.textContent = 'Remove';
-      btn.onclick = () => deleteRole(r.role_name);
-      actTd.appendChild(btn);
+      actTd.style.cssText = 'display:flex;gap:6px;padding:10px 12px';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn btn-g btn-sm'; editBtn.textContent = 'Edit';
+      editBtn.onclick = () => openEditRoleModal(r);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-d btn-sm'; delBtn.textContent = 'Remove';
+      delBtn.onclick = () => deleteRole(r.role_name);
+
+      actTd.appendChild(editBtn); actTd.appendChild(delBtn);
     });
 
     card.appendChild(table);
@@ -843,18 +1021,29 @@ async function loadRoles() {
   } catch (e) { toast(e.message, 'err'); }
 }
 
+function openEditRoleModal(r) {
+  document.getElementById('f-rname').value = r.role_name;
+  document.getElementById('f-rproviders').value = r.providers.join(', ');
+  const ents = r.entitlements && Object.keys(r.entitlements).length > 0
+    ? JSON.stringify(r.entitlements, null, 2) : '';
+  document.getElementById('f-rentitlements').value = ents;
+  openModal('modal-role');
+}
+
 async function deleteRole(name) {
-  if (!confirm(`Remove role mapping for "${name}"?`)) return;
+  if (!confirm('Remove role mapping for "' + name + '"?')) return;
   try {
-    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/roles/' + encodeURIComponent(name), { method: 'DELETE' });
     toast('Role mapping removed');
     loadRoles();
   } catch (e) { toast(e.message, 'err'); }
 }
 
-// ── Modals ────────────────────────────────────────────────────
+// ── Modals ─────────────────────────────────────────────────────
 function openModal(id) {
-  if (id !== 'modal-company' && !selectedCompany) { toast('Select a company first', 'err'); return; }
+  if (id !== 'modal-company' && id !== 'modal-manual-action' && !selectedCompany) {
+    toast('Select a company first', 'err'); return;
+  }
   document.getElementById(id).classList.add('open');
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -867,7 +1056,7 @@ async function submitCompany() {
   const id   = document.getElementById('f-cid').value.trim();
   const name = document.getElementById('f-cname').value.trim();
   const key  = document.getElementById('f-ckey').value.trim();
-  if (!id || !name || key.length < 16) { toast('Company ID, Name, and API Key (min 16 chars) are required', 'err'); return; }
+  if (!id || !name || key.length < 16) { toast('Company ID, Name, and API Key (min 16 chars) required', 'err'); return; }
   try {
     await api('/api/v1/admin/companies', {
       method: 'POST',
@@ -875,9 +1064,7 @@ async function submitCompany() {
     });
     toast('Company created');
     closeModal('modal-company');
-    document.getElementById('f-cid').value = '';
-    document.getElementById('f-cname').value = '';
-    document.getElementById('f-ckey').value = '';
+    ['f-cid','f-cname','f-ckey'].forEach(i => document.getElementById(i).value = '');
     loadCompanies();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -889,7 +1076,7 @@ async function submitProvider() {
   let creds;
   try { creds = JSON.parse(raw); } catch { toast('Credentials must be valid JSON', 'err'); return; }
   try {
-    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/providers/${encodeURIComponent(name)}`, {
+    await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/providers/' + encodeURIComponent(name), {
       method: 'PUT',
       body: JSON.stringify({ provider_name: name, credentials: creds, enabled }),
     });
@@ -904,16 +1091,24 @@ async function submitRole() {
   const name      = document.getElementById('f-rname').value.trim();
   const providers = document.getElementById('f-rproviders').value
     .split(',').map(s => s.trim()).filter(Boolean);
+  const rawEnts   = document.getElementById('f-rentitlements').value.trim();
+
   if (!name || !providers.length) { toast('Role name and at least one provider are required', 'err'); return; }
+
+  let entitlements = {};
+  if (rawEnts) {
+    try { entitlements = JSON.parse(rawEnts); }
+    catch { toast('Entitlements must be valid JSON (or leave blank)', 'err'); return; }
+  }
+
   try {
-    await api(`/api/v1/admin/companies/${encodeURIComponent(selectedCompany)}/roles/${encodeURIComponent(name)}`, {
+    await api('/api/v1/admin/companies/' + encodeURIComponent(selectedCompany) + '/roles/' + encodeURIComponent(name), {
       method: 'PUT',
-      body: JSON.stringify({ role_name: name, providers }),
+      body: JSON.stringify({ role_name: name, providers, entitlements }),
     });
     toast('Role mapping saved');
     closeModal('modal-role');
-    document.getElementById('f-rname').value = '';
-    document.getElementById('f-rproviders').value = '';
+    ['f-rname','f-rproviders','f-rentitlements'].forEach(i => document.getElementById(i).value = '');
     loadRoles();
   } catch (e) { toast(e.message, 'err'); }
 }

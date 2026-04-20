@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProviderConfigIn(BaseModel):
@@ -27,6 +27,8 @@ class ProviderConfigOut(BaseModel):
 class RoleMappingIn(BaseModel):
     role_name: str
     providers: list[str]
+    # Optional per-provider entitlements: {"microsoft": {"grant": [...], "revoke": [...]}}
+    entitlements: dict[str, Any] = Field(default_factory=dict)
 
 
 class RoleMappingOut(BaseModel):
@@ -34,6 +36,7 @@ class RoleMappingOut(BaseModel):
     company_id: str
     role_name: str
     providers: list[str]
+    entitlements: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}
 

@@ -1,4 +1,44 @@
 {
+  "stefan.markovic@demo-corp.com": {
+    "name": "Stefan Markovi\u0107",
+    "role": "Software Engineer",
+    "status": "active"
+  },
+  "ana.jovanovic@demo-corp.com": {
+    "name": "Ana Jovanovi\u0107",
+    "role": "Finance Manager",
+    "status": "active"
+  },
+  "nikola.petrovic@demo-corp.com": {
+    "name": "Nikola Petrovi\u0107",
+    "role": "CEO",
+    "status": "active"
+  },
+  "milica.stojanovic@demo-corp.com": {
+    "name": "Milica Stojanovi\u0107",
+    "role": "Accountant",
+    "status": "active"
+  },
+  "jovana.ilic@demo-corp.com": {
+    "name": "Jovana Ili\u0107",
+    "role": "Software Engineer",
+    "status": "active"
+  },
+  "marko.djordjevic@demo-corp.com": {
+    "name": "Marko \u0110or\u0111evi\u0107",
+    "role": "Intern",
+    "status": "active"
+  },
+  "sara.radovic@demo-corp.com": {
+    "name": "Sara Radovi\u0107",
+    "role": "Finance Manager",
+    "status": "left"
+  },
+  "stefan.test@demo-corp.com": {
+    "name": "Stefke Test",
+    "role": "Software Engineer",
+    "status": "active"
+  },
   "alice@testcorp.com": {
     "name": "Alice Smith",
     "role": "Software Engineer",

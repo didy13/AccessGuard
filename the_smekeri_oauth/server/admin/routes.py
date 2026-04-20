@@ -134,7 +134,10 @@ def delete_provider(company_id: str, provider_name: str, db: Session = Depends(g
 def list_role_mappings(company_id: str, db: Session = Depends(get_db)):
     _get_company_or_404(company_id, db)
     rows = db.query(RoleMapping).filter_by(company_id=company_id).all()
-    return [RoleMappingOut(id=r.id, company_id=r.company_id, role_name=r.role_name, providers=r.providers) for r in rows]
+    return [
+        RoleMappingOut(id=r.id, company_id=r.company_id, role_name=r.role_name, providers=r.providers, entitlements=r.entitlements)
+        for r in rows
+    ]
 
 
 @router.put("/companies/{company_id}/roles/{role_name}", response_model=RoleMappingOut, dependencies=[Depends(require_admin)])
@@ -145,9 +148,10 @@ def upsert_role_mapping(company_id: str, role_name: str, body: RoleMappingIn, db
         row = RoleMapping(company_id=company_id, role_name=role_name)
         db.add(row)
     row.providers = body.providers
+    row.entitlements = body.entitlements
     db.commit()
     db.refresh(row)
-    return RoleMappingOut(id=row.id, company_id=row.company_id, role_name=row.role_name, providers=row.providers)
+    return RoleMappingOut(id=row.id, company_id=row.company_id, role_name=row.role_name, providers=row.providers, entitlements=row.entitlements)
 
 
 @router.delete("/companies/{company_id}/roles/{role_name}", status_code=204, dependencies=[Depends(require_admin)])

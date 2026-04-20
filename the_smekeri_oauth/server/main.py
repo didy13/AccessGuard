@@ -16,18 +16,20 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, sta
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from server.admin.routes import router as admin_router
 from server.config import get_config
 from server.database.db import create_all_tables, get_db
-from server.database.models import AuditLog
+from server.database.models import AuditLog, Company, RoleMapping
 from server.models.log import AuditLogOut, LogStatsOut
 from server.models.payload import AgentPayload, EventResponse
 from server.services.credential_service import company_exists, verify_agent_api_key
 from server.services.log_service import get_logs, get_stats
 from server.services.router import process_payload
+from shared.schema import ActionType, ProviderAccessChange
 
 # Import providers so they register themselves
 import server.providers  # noqa: F401
@@ -126,11 +128,21 @@ def ingest_event(
 def query_logs(
     company_id: str | None = Query(None),
     employee_email: str | None = Query(None),
+    action_type: str | None = Query(None),
+    provider: str | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return get_logs(db, company_id=company_id, employee_email=employee_email, limit=limit, offset=offset)
+    return get_logs(
+        db,
+        company_id=company_id,
+        employee_email=employee_email,
+        action_type=action_type,
+        provider=provider,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @app.get("/api/v1/logs/stats", response_model=LogStatsOut)
@@ -213,6 +225,124 @@ def user_tokens(
         }
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Manual employee actions (admin-only)
+# ---------------------------------------------------------------------------
+
+class ManualActionIn(BaseModel):
+    action_type: ActionType
+    employee_name: str = ""
+    previous_role: str | None = None
+    new_role: str | None = None
+
+
+@app.post(
+    "/api/v1/companies/{company_id}/employees/{email}/action",
+    response_model=EventResponse,
+    summary="Manually trigger grant/revoke for an employee (admin only)",
+)
+def manual_employee_action(
+    company_id: str,
+    email: str,
+    body: ManualActionIn,
+    x_admin_key: str = Header(default="", alias="X-Admin-Key"),
+    db: Session = Depends(get_db),
+):
+    cfg = get_config()
+    if cfg.admin_api_key and x_admin_key != cfg.admin_api_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    company = db.query(Company).filter_by(company_id=company_id).first()
+    if not company:
+        raise HTTPException(404, f"Company '{company_id}' not found")
+
+    last_log = (
+        db.query(AuditLog)
+        .filter_by(company_id=company_id, employee_email=email)
+        .order_by(AuditLog.timestamp.desc())
+        .first()
+    )
+    employee_name = body.employee_name or (last_log.employee_name if last_log else email)
+
+    access_changes: list[ProviderAccessChange] = []
+
+    if body.action_type == ActionType.TERMINATED:
+        if body.previous_role:
+            access_changes = _changes_for_role(company_id, body.previous_role, "revoke", db)
+        else:
+            active = _current_access_providers(email, company_id, db)
+            access_changes = [ProviderAccessChange(provider=p, action="revoke", entitlements=[]) for p in active]
+
+    elif body.action_type == ActionType.ROLE_CHANGED:
+        revokes = _changes_for_role(company_id, body.previous_role, "revoke", db) if body.previous_role else []
+        grants = _changes_for_role(company_id, body.new_role, "grant", db) if body.new_role else []
+        access_changes = revokes + grants
+
+    elif body.action_type == ActionType.ADDED:
+        access_changes = _changes_for_role(company_id, body.new_role, "grant", db) if body.new_role else []
+
+    if not access_changes:
+        raise HTTPException(
+            400,
+            "No access changes to process — configure role mappings for this company first, "
+            "or for 'terminated' the employee must have active access in the audit log.",
+        )
+
+    payload = AgentPayload(
+        company_id=company_id,
+        company_name=company.company_name,
+        employee_email=email,
+        employee_name=employee_name,
+        action_type=body.action_type,
+        previous_role=body.previous_role,
+        new_role=body.new_role,
+        access_changes=access_changes,
+        metadata={"triggered_by": "manual"},
+    )
+
+    report = process_payload(payload, db)
+
+    return EventResponse(
+        status="processed",
+        company_id=report.company_id,
+        employee_email=report.employee_email,
+        action_type=report.action_type,
+        results=report.results,
+        processed_at=report.processed_at,
+        all_succeeded=report.all_succeeded,
+    )
+
+
+def _changes_for_role(
+    company_id: str, role_name: str | None, action: str, db: Session
+) -> list[ProviderAccessChange]:
+    if not role_name:
+        return []
+    rm = db.query(RoleMapping).filter_by(company_id=company_id, role_name=role_name).first()
+    if not rm:
+        return []
+    ents_map = rm.entitlements
+    return [
+        ProviderAccessChange(
+            provider=p,
+            action=action,
+            entitlements=ents_map.get(p, {}).get(action, []),
+        )
+        for p in rm.providers
+    ]
+
+
+def _current_access_providers(email: str, company_id: str, db: Session) -> list[str]:
+    subq = (
+        db.query(AuditLog.provider, func.max(AuditLog.id).label("max_id"))
+        .filter(AuditLog.employee_email == email, AuditLog.company_id == company_id)
+        .group_by(AuditLog.provider)
+        .subquery()
+    )
+    rows = db.query(AuditLog).join(subq, AuditLog.id == subq.c.max_id).all()
+    return [r.provider for r in rows if r.action == "grant" and r.success]
 
 
 # ---------------------------------------------------------------------------
