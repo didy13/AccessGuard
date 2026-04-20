@@ -37,12 +37,15 @@ def record_result(payload: AgentPayload, result: ProviderResult, db: Session) ->
 def get_logs(
     db: Session,
     company_id: str | None = None,
+    employee_email: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[AuditLog]:
     q = db.query(AuditLog).order_by(AuditLog.timestamp.desc())
     if company_id:
         q = q.filter(AuditLog.company_id == company_id)
+    if employee_email:
+        q = q.filter(AuditLog.employee_email.ilike(f"%{employee_email}%"))
     return q.offset(offset).limit(limit).all()
 
 
